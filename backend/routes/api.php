@@ -30,6 +30,7 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::get('/media', [MediaController::class, 'index']);
     Route::post('/media', [MediaController::class, 'store']);
     Route::get('/media/{id}', [MediaController::class, 'show']);
+    Route::post('/media/{id}/pdf', [MediaController::class, 'toPdf']);
     Route::delete('/media/{id}', [MediaController::class, 'destroy']);
 
     Route::post('/transcribe', [TranscribeController::class, 'store']);

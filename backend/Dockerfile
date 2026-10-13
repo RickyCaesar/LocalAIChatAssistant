@@ -9,6 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tesseract-ocr \
         tesseract-ocr-ind \
         poppler-utils \
+        libreoffice-writer \
+        libreoffice-impress \
+        libreoffice-calc \
+        fonts-liberation \
         python3 \
         python3-venv \
     && docker-php-ext-install mbstring zip bcmath pdo_mysql \

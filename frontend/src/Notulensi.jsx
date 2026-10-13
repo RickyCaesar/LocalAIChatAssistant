@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { streamChat } from './api.js';
 
 const PROMPT =
@@ -78,13 +79,22 @@ export default function Notulensi() {
         <div className={`mt-4 ${card}`}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Hasil notulensi</h3>
-            <button
-              type="button"
-              onClick={copy}
-              className="text-xs font-medium text-brand transition hover:opacity-70 dark:text-skyblue"
-            >
-              {copied ? 'Tersalin' : 'Salin'}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="text-xs font-medium text-brand transition hover:opacity-70 dark:text-skyblue"
+              >
+                Simpan PDF
+              </button>
+              <button
+                type="button"
+                onClick={copy}
+                className="text-xs font-medium text-brand transition hover:opacity-70 dark:text-skyblue"
+              >
+                {copied ? 'Tersalin' : 'Salin'}
+              </button>
+            </div>
           </div>
           <textarea
             value={minutes}
@@ -92,6 +102,15 @@ export default function Notulensi() {
             rows={14}
             className="mt-3 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
           />
+        </div>
+      )}
+
+      {minutes && (
+        <div id="notulensi-print" className="hidden print:block">
+          <h1 className="text-xl font-bold">Notulensi</h1>
+          <div className="mt-4 text-sm leading-relaxed">
+            <ReactMarkdown>{minutes}</ReactMarkdown>
+          </div>
         </div>
       )}
     </div>

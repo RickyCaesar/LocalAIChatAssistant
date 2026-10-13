@@ -47,6 +47,7 @@ export default function Gallery() {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState(null);
+  const [converting, setConverting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -69,6 +70,21 @@ export default function Gallery() {
       setSelected((cur) => (cur && cur.id === id ? null : cur));
     } catch (e) {
       setError(e.message);
+    }
+  };
+
+  const toPdf = async () => {
+    if (!selected) return;
+    setConverting(true);
+    setError(null);
+    try {
+      const made = await api(`/api/media/${selected.id}/pdf`, { method: 'POST' });
+      setItems((prev) => [made, ...prev]);
+      setSelected(made);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -215,6 +231,16 @@ export default function Gallery() {
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
+                {selected.mime !== 'application/pdf' && (
+                  <button
+                    type="button"
+                    onClick={toPdf}
+                    disabled={converting}
+                    className="rounded-xl bg-skyblue px-3 py-2 text-sm font-medium text-brand-900 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {converting ? 'Mengonversi...' : 'Jadikan PDF'}
+                  </button>
+                )}
                 <a
                   href={downloadSrc(selected.url)}
                   download={selected.filename}

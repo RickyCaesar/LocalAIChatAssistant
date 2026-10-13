@@ -9,7 +9,7 @@ services:
       - ./backend/.env:/app/.env:ro
       - ./backend/database.sqlite:/app/database/database.sqlite
       - ./backend/storage/app:/app/storage/app
-      - /home/ROG:/home/ROG:ro
+      - ${HOME}:${HOME}:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

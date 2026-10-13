@@ -7,6 +7,7 @@ use App\Models\Media;
 use App\Models\Setting;
 use App\Support\FilePreview;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 
 class MediaController extends Controller
@@ -72,6 +73,63 @@ class MediaController extends Controller
         $media = $query->orderByDesc('created_at')->get()->map(fn ($m) => $this->serialize($m));
 
         return response()->json(['media' => $media]);
+    }
+
+    // Konversi berkas ke PDF pakai LibreOffice headless. ponytail: proses
+    // sinkron (~beberapa detik/doc), blokir itu wajar untuk pemakaian lokal.
+    public function toPdf(string $id)
+    {
+        $media = Media::where('user_id', auth()->id())->findOrFail($id);
+        $src = storage_path('app/private/'.$media->path);
+
+        if (! is_file($src)) {
+            return response()->json(['error' => 'Berkas tidak ditemukan.'], 404);
+        }
+        if ($media->mime === 'application/pdf') {
+            return response()->json($this->serialize($media));
+        }
+
+        $outDir = storage_path('app/private/tmp-convert');
+        if (! is_dir($outDir)) {
+            mkdir($outDir, 0775, true);
+        }
+
+        $home = sys_get_temp_dir().'/lo-'.Str::uuid();
+        $process = Process::timeout(180)->run([
+            'soffice', '--headless', '--norestore',
+            '-env:UserInstallation=file://'.$home,
+            '--convert-to', 'pdf', '--outdir', $outDir, $src,
+        ], null, ['HOME' => $home]);
+
+        $pdf = $outDir.'/'.pathinfo($src, PATHINFO_FILENAME).'.pdf';
+        if (! is_file($pdf)) {
+            return response()->json([
+                'error' => 'Konversi ke PDF gagal.',
+                'detail' => trim($process->errorOutput() ?: $process->output()),
+            ], 422);
+        }
+
+        $rel = 'media/'.auth()->id().'/'.Str::uuid().'.pdf';
+        $dest = storage_path('app/private/'.$rel);
+        if (! is_dir(dirname($dest))) {
+            mkdir(dirname($dest), 0775, true);
+        }
+        rename($pdf, $dest);
+
+        $pdfMedia = Media::create([
+            'user_id' => auth()->id(),
+            'session_id' => $media->session_id,
+            'role' => 'assistant',
+            'kind' => 'file',
+            'filename' => pathinfo($media->filename, PATHINFO_FILENAME).'.pdf',
+            'mime' => 'application/pdf',
+            'size' => filesize($dest),
+            'path' => $rel,
+            'preview' => FilePreview::extract($dest),
+            'model' => $media->model,
+        ]);
+
+        return response()->json($this->serialize($pdfMedia), 201);
     }
 
     public function show(string $id)

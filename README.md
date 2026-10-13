@@ -7,6 +7,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun.
 - **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo dan event kalender, serta mengirim berkas hasil olahan.
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
+- **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
 - **Gallery**: daftar media yang dikirim/dihasilkan, dengan pratinjau (gambar, PDF, audio, video, teks/dokumen) dan tombol unduh.
 - **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper` di container backend.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI.
@@ -20,6 +21,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Frontend:** React (Vite), Tailwind CSS, react-markdown
 - **Backend:** PHP + Laravel (HTTP Client, SQLite)
 - **STT:** faster-whisper (CPU, `int8`) di dalam container backend
+- **Konversi PDF:** LibreOffice headless di dalam container backend
 - **AI Engine:** Hermes Agent lokal (gateway HTTP)
 - **Deployment:** Docker & Docker Compose
 
@@ -30,14 +32,22 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 ## Menjalankan
 
-1. Siapkan `backend/.env` (lihat [Konfigurasi](#konfigurasi)).
-2. Dari folder root proyek:
+1. Salin contoh konfigurasi dan isi `APP_KEY`:
+
+   ```bash
+   cp backend/.env.example backend/.env
+   docker compose run --rm backend php artisan key:generate --show   # salin hasilnya ke APP_KEY
+   ```
+
+2. **Sesuaikan path**: nilai `/home/ROG/MyAssistant` di `backend/.env` dan `tools/topdf.sh` harus menunjuk ke lokasi repo Anda. `docker-compose.yml` me-mount `$HOME`, jadi letakkan repo di dalam home directory.
+
+3. Jalankan dari folder root proyek:
 
    ```bash
    docker compose up -d --build
    ```
 
-3. Akses aplikasi:
+4. Akses aplikasi:
    - **Frontend:** http://localhost:5173
    - **Backend API:** http://localhost:8000
 
@@ -46,7 +56,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 ## Konfigurasi
 
-### `backend/.env` (variabel lingkungan)
+### `backend/.env` (salin dari `backend/.env.example`)
 
 | Variabel | Default | keterangan |
 |---|---|---|
@@ -84,6 +94,7 @@ Gateway yang dipakai aplikasi: `GET /v1/models` (daftar model) dan `POST /v1/cha
 
 ```
 backend/            Laravel API
+  .env.example                contoh konfigurasi (salin ke .env)
   app/Http/Controllers/Api/   Auth, Chat, Media, Transcribe, Todo, Event, User, Skill, AI
   app/Support/                FilePreview (ekstraksi teks/OCR), ActionRunner (aksi dari chat)
   stt/transcribe.py           skrip faster-whisper
@@ -91,6 +102,7 @@ backend/            Laravel API
 frontend/           React + Vite + Tailwind
   src/App.jsx                 shell, navigasi sidebar, chat
   src/*.jsx                   Gallery, Todo, Calendar, Transcribe, Notulensi, Skills, Settings, Users, Dashboard
+tools/topdf.sh      konversi dokumen → PDF via container (dipakai agent dari chat)
 docker-compose.yml
 ```
 
@@ -101,7 +113,7 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - **Auth:** `POST /api/register`, `POST /api/login`, `GET /api/me`, `POST /api/logout`
 - **Sessions:** `GET|POST /api/sessions`, `PUT|DELETE /api/sessions/{id}`
 - **Chat:** `POST /api/chat` (streaming SSE), `GET /api/models`
-- **Media:** `GET|POST /api/media`, `GET|DELETE /api/media/{id}` (pratinjau inline; `?download=1` untuk unduh)
+- **Media:** `GET|POST /api/media`, `GET|DELETE /api/media/{id}` (pratinjau inline; `?download=1` untuk unduh), `POST /api/media/{id}/pdf` (konversi berkas ke PDF)
 - **Transkripsi:** `POST /api/transcribe`
 - **Todo:** `GET|POST /api/todos`, `PUT|DELETE /api/todos/{id}`
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
@@ -113,5 +125,6 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - `php artisan serve` berjalan single-thread: selama satu request panjang (mis. transkripsi) berjalan, request lain menunggu. Cukup untuk pemakaian lokal.
 - OCR dan ekstraksi dokumen dilakukan sinkron saat unggah; deck besar (banyak slide) bisa lambat.
 - Transkripsi berjalan di CPU (mode `int8`), sehingga model besar terasa lambat.
-- Berkas Office (DOCX/XLSX/PPTX) tak dirender native oleh browser; pratinjau menampilkan teks hasil ekstraksi, bukan tata letak aslinya.
+- Berkas Office (DOCX/XLSX/PPTX) tak dirender native oleh browser; pratinjau menampilkan teks hasil ekstraksi. Untuk tata letak asli, konversikan ke PDF (LibreOffice mempertahankan format).
+- Konversi PDF berjalan sinkron (beberapa detik per berkas); LibreOffice memuat profil saat pertama kali dipanggil.
 - Token media dikirim lewat query `?auth=` (keterbatasan `<img>`/`<iframe>`), sehingga bisa muncul di log akses.
