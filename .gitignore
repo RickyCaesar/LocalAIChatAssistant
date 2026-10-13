@@ -1,0 +1,25 @@
+# Dependencies & build artifacts
+/backend/vendor
+/frontend/node_modules
+/frontend/dist
+/backend/node_modules
+
+# Local environment / secrets
+/backend/.env
+/backend/.env.*
+!/backend/.env.example
+
+# Runtime data (SQLite, unggahan media, model STT, cache)
+/backend/database.sqlite
+/backend/storage/
+/backend/bootstrap/cache/
+/data/
+/media/
+
+# Editor / OS
+.DS_Store
+/.idea
+/.vscode
+
+# Local tooling
+/.opencode/

@@ -1,0 +1,323 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== runtime palette (themes) ===== */
+:root,
+[data-palette="klasik"] {
+  --c-brand: #425B9A;
+  --c-brand-100: #DCE3F0;
+  --c-brand-500: #425B9A;
+  --c-brand-600: #354A80;
+  --c-brand-700: #2A3A66;
+  --c-brand-800: #1F2B4D;
+  --c-brand-900: #171F38;
+  --c-brand-950: #0F162B;
+  --c-skyblue: #76C0EC;
+  --c-cream: #FFF6DC;
+  --c-blush: #FF95A5;
+}
+[data-palette="senja"] {
+  --c-brand: #6E4F9F;
+  --c-brand-100: #ECE4F7;
+  --c-brand-500: #6E4F9F;
+  --c-brand-600: #5A3F85;
+  --c-brand-700: #463162;
+  --c-brand-800: #32224A;
+  --c-brand-900: #251836;
+  --c-brand-950: #1A1128;
+  --c-skyblue: #AFC6EF;
+  --c-cream: #FAF4FF;
+  --c-blush: #FFB0C9;
+}
+[data-palette="mint"] {
+  --c-brand: #1E8A7E;
+  --c-brand-100: #DDF1ED;
+  --c-brand-500: #1E8A7E;
+  --c-brand-600: #187066;
+  --c-brand-700: #134F47;
+  --c-brand-800: #0E3A34;
+  --c-brand-900: #0B2E29;
+  --c-brand-950: #07201C;
+  --c-skyblue: #90D9C9;
+  --c-cream: #EEFBF3;
+  --c-blush: #FF9E8B;
+}
+:root,
+[data-palette="klasik"] {
+  --c-brand: #425B9A;
+  --c-100: #DCE3F0;
+  --c-500: #425B9A;
+  --c-600: #354A80;
+  --c-700: #2A3A66;
+  --c-800: #1F2B4D;
+  --c-900: #171F38;
+  --c-950: #0F162B;
+  --c-skyblue: #76C0EC;
+  --c-cream: #FFF6DC;
+  --c-blush: #FF95A5;
+}
+[data-palette="senja"] {
+  --c-brand: #6E4F9F;
+  --c-100: #ECE4F7;
+  --c-500: #6E4F9F;
+  --c-600: #5A3F85;
+  --c-700: #463162;
+  --c-800: #32224A;
+  --c-900: #251836;
+  --c-950: #1A1128;
+  --c-skyblue: #AFC6EF;
+  --c-cream: #FAF4FF;
+  --c-blush: #FFB0C9;
+}
+[data-palette="mint"] {
+  --c-brand: #1E8A7E;
+  --c-100: #DDF1ED;
+  --c-500: #1E8A7E;
+  --c-600: #187066;
+  --c-700: #134F47;
+  --c-800: #0E3A34;
+  --c-900: #0B2E29;
+  --c-950: #07201C;
+  --c-skyblue: #90D9C9;
+  --c-cream: #EEFBF3;
+  --c-blush: #FF9E8B;
+}
+
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Chat markdown defaults (applied on the AI bubble content) */
+.prose-chat p {
+  margin: 0.35rem 0;
+}
+.prose-chat ul,
+.prose-chat ol {
+  margin: 0.4rem 0;
+  padding-left: 1.25rem;
+}
+.prose-chat ul {
+  list-style: disc;
+}
+.prose-chat ol {
+  list-style: decimal;
+}
+.prose-chat li {
+  margin: 0.15rem 0;
+}
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3,
+.prose-chat h4 {
+  font-weight: 600;
+  margin: 0.75rem 0 0.35rem;
+}
+.prose-chat h1 {
+  font-size: 1.25rem;
+}
+.prose-chat h2 {
+  font-size: 1.125rem;
+}
+.prose-chat h3,
+.prose-chat h4 {
+  font-size: 1rem;
+}
+.prose-chat a {
+  color: #425b9a;
+  text-decoration: underline;
+}
+.prose-chat blockquote {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 0.75rem;
+  color: #64748b;
+  margin: 0.5rem 0;
+}
+.prose-chat table {
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+}
+.prose-chat th,
+.prose-chat td {
+  border: 1px solid #cbd5e1;
+  padding: 0.25rem 0.5rem;
+}
+.prose-chat code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.prose-chat > :first-child {
+  margin-top: 0;
+}
+.prose-chat > :last-child {
+  margin-bottom: 0;
+}
+
+/* Slim scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+.bg-blush{
+  background-color: var(--c-blush);
+}
+.bg-brand{
+  background-color: var(--c-brand);
+}
+.bg-brand-600{
+  background-color: var(--c-brand-600);
+}
+.bg-brand\/80{
+  background-color: color-mix(in srgb, var(--c-brand) 80%, transparent);
+}
+.bg-cream{
+  background-color: var(--c-cream);
+}
+.bg-cream\/70{
+  background-color: color-mix(in srgb, var(--c-cream) 70%, transparent);
+}
+.bg-skyblue{
+  background-color: var(--c-skyblue);
+}
+.bg-skyblue\/15{
+  background-color: color-mix(in srgb, var(--c-skyblue) 15%, transparent);
+}
+.bg-skyblue\/20{
+  background-color: color-mix(in srgb, var(--c-skyblue) 20%, transparent);
+}
+.bg-skyblue\/30{
+  background-color: color-mix(in srgb, var(--c-skyblue) 30%, transparent);
+}
+.border-brand{
+  border-color: var(--c-brand);
+}
+.border-skyblue{
+  border-color: var(--c-skyblue);
+}
+.dark\:bg-brand:is(.dark *){
+  background-color: var(--c-brand);
+}
+.dark\:bg-brand-700:is(.dark *){
+  background-color: var(--c-brand-700);
+}
+.dark\:bg-brand-800:is(.dark *){
+  background-color: var(--c-brand-800);
+}
+.dark\:bg-brand-800\/40:is(.dark *){
+  background-color: color-mix(in srgb, var(--c-brand-800) 40%, transparent);
+}
+.dark\:bg-brand-800\/80:is(.dark *){
+  background-color: color-mix(in srgb, var(--c-brand-800) 80%, transparent);
+}
+.dark\:bg-brand-900:is(.dark *){
+  background-color: var(--c-brand-900);
+}
+.dark\:bg-brand-900\/60:is(.dark *){
+  background-color: color-mix(in srgb, var(--c-brand-900) 60%, transparent);
+}
+.dark\:bg-brand-900\/90:is(.dark *){
+  background-color: color-mix(in srgb, var(--c-brand-900) 90%, transparent);
+}
+.dark\:bg-brand-950:is(.dark *){
+  background-color: var(--c-brand-950);
+}
+.dark\:bg-cream:is(.dark *){
+  background-color: var(--c-cream);
+}
+.dark\:border-skyblue:is(.dark *){
+  border-color: var(--c-skyblue);
+}
+.dark\:decoration-blush:is(.dark *){
+  text-decoration-color: var(--c-blush);
+}
+.dark\:hover\:bg-brand-800\/60:hover:is(.dark *){
+  background-color: color-mix(in srgb, var(--c-brand-800) 60%, transparent);
+}
+.dark\:hover\:text-skyblue:hover:is(.dark *){
+  color: var(--c-skyblue);
+}
+.dark\:text-blush:is(.dark *){
+  color: var(--c-blush);
+}
+.dark\:text-cream:is(.dark *){
+  color: var(--c-cream);
+}
+.dark\:text-skyblue:is(.dark *){
+  color: var(--c-skyblue);
+}
+.decoration-skyblue{
+  text-decoration-color: var(--c-skyblue);
+}
+.hover\:bg-brand:hover{
+  background-color: var(--c-brand);
+}
+.hover\:bg-brand-100:hover{
+  background-color: var(--c-brand-100);
+}
+.hover\:bg-brand-600:hover{
+  background-color: var(--c-brand-600);
+}
+.hover\:bg-brand-800:hover{
+  background-color: var(--c-brand-800);
+}
+.hover\:bg-brand-800\/60:hover{
+  background-color: color-mix(in srgb, var(--c-brand-800) 60%, transparent);
+}
+.hover\:bg-cream:hover{
+  background-color: var(--c-cream);
+}
+.hover\:bg-skyblue\/15:hover{
+  background-color: color-mix(in srgb, var(--c-skyblue) 15%, transparent);
+}
+.hover\:text-blush:hover{
+  color: var(--c-blush);
+}
+.hover\:text-brand-500:hover{
+  color: var(--c-brand-500);
+}
+.text-blush{
+  color: var(--c-blush);
+}
+.text-brand{
+  color: var(--c-brand);
+}
+.text-brand-500{
+  color: var(--c-brand-500);
+}
+.text-brand-700{
+  color: var(--c-brand-700);
+}
+.text-brand-900{
+  color: var(--c-brand-900);
+}
+.ring-brand\/40{
+  --tw-ring-color: color-mix(in srgb, var(--c-brand) 40%, transparent);
+}
+.ring-skyblue\/40{
+  --tw-ring-color: color-mix(in srgb, var(--c-skyblue) 40%, transparent);
+}
+.dark\:ring-skyblue\/40:is(.dark *){
+  --tw-ring-color: color-mix(in srgb, var(--c-skyblue) 40%, transparent);
+}
+.hover\:border-brand\/50:hover{
+  border-color: color-mix(in srgb, var(--c-brand) 50%, transparent);
+}
+.border-brand\/50{
+  border-color: color-mix(in srgb, var(--c-brand) 50%, transparent);
+}

@@ -1,0 +1,126 @@
+import { useRef, useState } from 'react';
+import { apiTranscribe } from './api.js';
+
+export default function Transcribe() {
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [text, setText] = useState('');
+  const [meta, setMeta] = useState(null);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState('');
+  const inputRef = useRef(null);
+
+  const run = async () => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    setText('');
+    setMeta(null);
+    try {
+      const data = await apiTranscribe(file);
+      setText(data.text || '');
+      setMeta(data);
+      try {
+        if (data.text) localStorage.setItem('last-transcript', data.text);
+      } catch {
+        /* ignore */
+      }
+      if (!data.text) setError('Tidak ada teks yang terdeteksi dari audio ini.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = (value, tag) => {
+    if (!value) return;
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(tag);
+      setTimeout(() => setCopied(''), 1500);
+    });
+  };
+
+  const download = () => {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (file?.name?.replace(/\.[^.]+$/, '') || 'transkrip') + '.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const card = 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700';
+
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-6">
+      <h2 className="text-lg font-semibold">Transkrip Audio</h2>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        Unggah file audio (mp3, m4a, wav, ogg) untuk diubah menjadi teks.
+      </p>
+
+      <div className={`mt-4 ${card}`}>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac"
+          className="hidden"
+          onChange={(e) => {
+            setFile(e.target.files?.[0] || null);
+            setError(null);
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium transition hover:bg-cream dark:border-slate-700 dark:hover:bg-brand-800"
+          >
+            Pilih file audio
+          </button>
+          <span className="min-w-0 flex-1 truncate text-sm text-slate-500 dark:text-slate-400">
+            {file ? file.name : 'Belum ada file dipilih'}
+          </span>
+          <button
+            type="button"
+            onClick={run}
+            disabled={!file || busy}
+            className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100"
+          >
+            {busy ? 'Memproses...' : 'Transkrip'}
+          </button>
+        </div>
+        {busy && (
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+            Sedang memproses audio di server. Audio panjang bisa butuh beberapa menit.
+          </p>
+        )}
+        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+      </div>
+
+      {text && (
+        <div className={`mt-4 ${card}`}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Hasil transkrip</h3>
+            <div className="flex items-center gap-2 text-xs">
+              {meta?.language && <span className="text-slate-400">[{meta.language}]</span>}
+              <button type="button" onClick={() => copy(text, 'text')} className="rounded-lg px-2 py-1 font-medium text-brand transition hover:bg-cream dark:text-skyblue dark:hover:bg-brand-800">
+                {copied === 'text' ? 'Tersalin' : 'Salin'}
+              </button>
+              <button type="button" onClick={download} className="rounded-lg px-2 py-1 font-medium text-brand transition hover:bg-cream dark:text-skyblue dark:hover:bg-brand-800">
+                Unduh .txt
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={12}
+            className="mt-3 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
