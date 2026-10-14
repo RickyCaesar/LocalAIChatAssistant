@@ -14,6 +14,7 @@ class Event extends Model
         'end_at',
         'description',
         'location',
+        'recurrence',
     ];
 
     protected $casts = [

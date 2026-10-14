@@ -12,6 +12,8 @@ class Todo extends Model
         'title',
         'done',
         'due_at',
+        'priority',
+        'notes',
     ];
 
     protected $casts = [

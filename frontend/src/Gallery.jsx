@@ -12,6 +12,19 @@ const fmtSize = (bytes) => {
   return `${bytes} B`;
 };
 
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+const relDate = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+  const time = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  if (days === 0) return `Hari ini, ${time}`;
+  if (days === 1) return `Kemarin, ${time}`;
+  if (days > 1 && days < 7) return `${d.toLocaleDateString('id-ID', { weekday: 'long' })}, ${time}`;
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
 const isImage = (m) => m.mime && m.mime.startsWith('image/');
 const isPdf = (m) => m.mime === 'application/pdf';
 const isAudio = (m) => m.mime && m.mime.startsWith('audio/');
@@ -34,6 +47,14 @@ const extClass = (ext) => {
   return 'bg-slate-200 text-slate-700 dark:bg-brand-800 dark:text-cream';
 };
 
+const categorize = (m) => {
+  if (isImage(m)) return 'image';
+  if (isPdf(m)) return 'pdf';
+  if (isAudio(m)) return 'audio';
+  if (isVideo(m)) return 'video';
+  return 'doc';
+};
+
 function FileIcon({ className = 'h-8 w-8' }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -46,10 +67,18 @@ function FileIcon({ className = 'h-8 w-8' }) {
 export default function Gallery() {
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [type, setType] = useState('all');
+  const [q, setQ] = useState('');
+  const [view, setView] = useState(() => localStorage.getItem('gallery-view') || 'grid');
   const [selected, setSelected] = useState(null);
   const [converting, setConverting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const setViewMode = (v) => {
+    setView(v);
+    localStorage.setItem('gallery-view', v);
+  };
 
   const load = () => {
     setError(null);
@@ -94,7 +123,22 @@ export default function Gallery() {
     { key: 'assistant', label: 'Diolah AI' },
   ];
 
-  const visible = filter === 'all' ? items : items.filter((m) => m.role === filter);
+  const typeOptions = [
+    { key: 'all', label: 'Semua tipe' },
+    { key: 'image', label: 'Gambar' },
+    { key: 'pdf', label: 'PDF' },
+    { key: 'doc', label: 'Dokumen' },
+    { key: 'audio', label: 'Audio' },
+    { key: 'video', label: 'Video' },
+  ];
+
+  const query = q.trim().toLowerCase();
+  const visible = items.filter((m) => {
+    if (filter !== 'all' && m.role !== filter) return false;
+    if (type !== 'all' && categorize(m) !== type) return false;
+    if (query && !`${m.filename || ''} ${m.session_title || ''}`.toLowerCase().includes(query)) return false;
+    return true;
+  });
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -125,13 +169,71 @@ export default function Gallery() {
 
       {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[12rem] flex-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Cari nama file atau percakapan..."
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
+          />
+        </div>
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-brand-800"
+        >
+          {typeOptions.map((t) => (
+            <option key={t.key} value={t.key}>{t.label}</option>
+          ))}
+        </select>
+        <div className="flex gap-1 rounded-xl bg-cream p-1 dark:bg-brand-900">
+          <button
+            type="button"
+            aria-label="Tampilan grid"
+            onClick={() => setViewMode('grid')}
+            className={`rounded-lg p-1.5 transition ${
+              view === 'grid' ? 'bg-white text-slate-900 shadow-sm dark:bg-brand-800 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label="Tampilan compact"
+            onClick={() => setViewMode('compact')}
+            className={`rounded-lg p-1.5 transition ${
+              view === 'compact' ? 'bg-white text-slate-900 shadow-sm dark:bg-brand-800 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="M8 6h13" />
+              <path d="M8 12h13" />
+              <path d="M8 18h13" />
+              <path d="M3 6h.01" />
+              <path d="M3 12h.01" />
+              <path d="M3 18h.01" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       {loading ? (
         <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Loading media...</p>
       ) : visible.length === 0 ? (
         <p className="mt-16 text-center text-sm text-slate-400 dark:text-slate-500">
-          Belum ada media. Kirim gambar di tab Chat untuk mulai.
+          {items.length === 0 ? 'Belum ada media. Kirim gambar di tab Chat untuk mulai.' : 'Tidak ada media yang cocok dengan pencarian/filter.'}
         </p>
-      ) : (
+      ) : view === 'grid' ? (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {visible.map((m) => (
             <button
@@ -169,11 +271,47 @@ export default function Gallery() {
                 </span>
               </div>
               <div className="p-2.5">
-                <p className="truncate text-xs font-medium">{m.filename}</p>
-                <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">
-                  {m.session_title || 'Tanpa percakapan'} · {fmtSize(m.size)}
+                <p className="truncate text-xs font-medium" title={m.filename}>{m.filename}</p>
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+                  <span className={`rounded px-1 py-0.5 font-bold uppercase tracking-wide ${extClass(extOf(m))}`}>{extOf(m)}</span>
+                  <span>{fmtSize(m.size)}</span>
+                </div>
+                <p className="mt-1 truncate text-[11px] text-slate-400 dark:text-slate-500" title={m.session_title || ''}>
+                  {relDate(m.created_at)}
+                  {m.session_title ? ` · ${m.session_title}` : ''}
                 </p>
               </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-brand-900 dark:ring-slate-700">
+          {visible.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setSelected(m)}
+              className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-cream dark:hover:bg-brand-800"
+            >
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-cream dark:bg-brand-800">
+                {isImage(m) ? (
+                  <img src={mediaSrc(m.url)} alt={m.filename} loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${extClass(extOf(m))}`}>{extOf(m)}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium" title={m.filename}>{m.filename}</p>
+                <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">
+                  {fmtSize(m.size)} · {relDate(m.created_at)}
+                  {m.session_title ? ` · ${m.session_title}` : ''}
+                </p>
+              </div>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                m.role === 'assistant' ? 'bg-emerald-500/90 text-white' : 'bg-brand/80 text-white'
+              }`}>
+                {m.role === 'assistant' ? 'AI' : 'Kirim'}
+              </span>
             </button>
           ))}
         </div>
@@ -222,13 +360,37 @@ export default function Gallery() {
                 <p className="text-xs">Pratinjau tidak tersedia</p>
               </div>
             )}
-            <div className="flex items-center justify-between gap-3 border-t border-slate-200 p-4 dark:border-slate-700">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{selected.filename}</p>
-                <p className="truncate text-xs text-slate-400 dark:text-slate-500">
-                  {selected.session_title || 'Tanpa percakapan'} · {fmtDate(selected.created_at)} · {fmtSize(selected.size)}
-                  {selected.model ? ` · ${selected.model}` : ''}
-                </p>
+            <div className="flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 p-4 dark:border-slate-700">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold" title={selected.filename}>{selected.filename}</p>
+                <dl className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+                  <div>
+                    <dt className="text-slate-400 dark:text-slate-500">Tanggal</dt>
+                    <dd className="text-slate-700 dark:text-slate-200">{fmtDate(selected.created_at)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400 dark:text-slate-500">Ukuran</dt>
+                    <dd className="text-slate-700 dark:text-slate-200">{fmtSize(selected.size)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400 dark:text-slate-500">Tipe</dt>
+                    <dd className="text-slate-700 dark:text-slate-200">{selected.mime || extOf(selected)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400 dark:text-slate-500">Asal</dt>
+                    <dd className="text-slate-700 dark:text-slate-200">{selected.role === 'assistant' ? 'Diolah AI' : 'Dikirim'}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-slate-400 dark:text-slate-500">Percakapan</dt>
+                    <dd className="truncate text-slate-700 dark:text-slate-200">{selected.session_title || 'Tanpa percakapan'}</dd>
+                  </div>
+                  {selected.model && (
+                    <div className="min-w-0">
+                      <dt className="text-slate-400 dark:text-slate-500">Model</dt>
+                      <dd className="truncate text-slate-700 dark:text-slate-200">{selected.model}</dd>
+                    </div>
+                  )}
+                </dl>
               </div>
               <div className="flex shrink-0 gap-2">
                 {selected.mime !== 'application/pdf' && (

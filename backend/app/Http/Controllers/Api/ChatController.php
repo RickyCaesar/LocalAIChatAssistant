@@ -323,18 +323,28 @@ class ChatController extends Controller
         }
 
         foreach (($validated['history'] ?? []) as $turn) {
-            if (isset($turn['role'], $turn['content'])) {
-                $messages[] = [
-                    'role' => (string) $turn['role'],
-                    'content' => $this->contentFor($turn),
-                ];
+            if (! isset($turn['role'], $turn['content'])) {
+                continue;
             }
+            $content = $this->contentFor($turn);
+            // API menolak turn ber-content kosong (400 INVALID_REQUEST_BODY).
+            if (is_string($content) && trim($content) === '') {
+                continue;
+            }
+            $messages[] = [
+                'role' => (string) $turn['role'],
+                'content' => $content,
+            ];
         }
 
-        $messages[] = [
-            'role' => 'user',
-            'content' => $this->contentFor(['content' => $validated['message'], 'image_ids' => $validated['image_ids'] ?? []]),
-        ];
+        $userContent = $this->contentFor([
+            'content' => $validated['message'],
+            'image_ids' => $validated['image_ids'] ?? [],
+        ]);
+        if (is_string($userContent) && trim($userContent) === '') {
+            $userContent = '[...]';
+        }
+        $messages[] = ['role' => 'user', 'content' => $userContent];
 
         $this->linkMedia($validated['image_ids'] ?? [], $validated['session_id'] ?? null);
 

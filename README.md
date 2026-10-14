@@ -4,14 +4,15 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 ## Fitur
 
-- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun.
+- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka.
 - **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo dan event kalender, serta mengirim berkas hasil olahan.
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
-- **Gallery**: daftar media yang dikirim/dihasilkan, dengan pratinjau (gambar, PDF, audio, video, teks/dokumen) dan tombol unduh.
-- **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper` di container backend.
+- **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pencarian**, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
+- **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper` di container backend; unggah via tombol atau **drag & drop**.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI.
-- **Todo List** dan **Kalender** (CRUD + dikendalikan dari chat).
+- **Todo List**: prioritas (tinggi/sedang/rendah), catatan, edit inline, due date + jam, filter Semua/Aktif/Selesai.
+- **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang (mingguan/bulanan/tahunan), edit/hapus. Bisa juga dikendalikan dari chat.
 - **Pengaturan**: model AI, timeout, batas ukuran unggah, model & bahasa transkripsi, dan tema tampilan (Klasik/Senja/Mint).
 - **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent.
 - **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik, Kelola Pengguna, Skill, Settings).
@@ -22,6 +23,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Backend:** PHP + Laravel (HTTP Client, SQLite)
 - **STT:** faster-whisper (CPU, `int8`) di dalam container backend
 - **Konversi PDF:** LibreOffice headless di dalam container backend
+- **Hari libur Indonesia:** pustaka `date-holidays` (offline, dihitung per tahun)
 - **AI Engine:** Hermes Agent lokal (gateway HTTP)
 - **Deployment:** Docker & Docker Compose
 
@@ -102,6 +104,7 @@ backend/            Laravel API
 frontend/           React + Vite + Tailwind
   src/App.jsx                 shell, navigasi sidebar, chat
   src/*.jsx                   Gallery, Todo, Calendar, Transcribe, Notulensi, Skills, Settings, Users, Dashboard
+  src/holidays.js             helper hari libur Indonesia (date-holidays)
 tools/topdf.sh      konversi dokumen → PDF via container (dipakai agent dari chat)
 docker-compose.yml
 ```
@@ -127,4 +130,7 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - Transkripsi berjalan di CPU (mode `int8`), sehingga model besar terasa lambat.
 - Berkas Office (DOCX/XLSX/PPTX) tak dirender native oleh browser; pratinjau menampilkan teks hasil ekstraksi. Untuk tata letak asli, konversikan ke PDF (LibreOffice mempertahankan format).
 - Konversi PDF berjalan sinkron (beberapa detik per berkas); LibreOffice memuat profil saat pertama kali dipanggil.
+- Hari libur dari `date-holidays` hanya mencakup libur nasional (`public`); cuti bersama tidak termasuk.
+- Acara berulang di-expand di sisi klien (maks 400 kejadian per event); edit/hapus berlaku untuk **seluruh seri**, bukan satu kejadian.
+- Pencarian & filter Gallery berjalan di sisi klien (memuat seluruh daftar media).
 - Token media dikirim lewat query `?auth=` (keterbatasan `<img>`/`<iframe>`), sehingga bisa muncul di log akses.

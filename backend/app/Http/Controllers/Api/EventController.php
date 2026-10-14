@@ -17,6 +17,7 @@ class EventController extends Controller
             'end_at' => $event->end_at ? $event->end_at->toIso8601String() : null,
             'description' => $event->description,
             'location' => $event->location,
+            'recurrence' => (string) ($event->recurrence ?: 'none'),
         ];
     }
 
@@ -38,6 +39,7 @@ class EventController extends Controller
             'end_at' => 'nullable|date|after_or_equal:start_at',
             'description' => 'nullable|string|max:2000',
             'location' => 'nullable|string|max:255',
+            'recurrence' => 'nullable|in:none,weekly,monthly,yearly',
         ]);
 
         $event = Event::create([
@@ -47,6 +49,7 @@ class EventController extends Controller
             'end_at' => $data['end_at'] ?? null,
             'description' => $data['description'] ?? null,
             'location' => $data['location'] ?? null,
+            'recurrence' => $data['recurrence'] ?? 'none',
         ]);
 
         return response()->json(['event' => $this->serialize($event)], 201);
@@ -62,6 +65,7 @@ class EventController extends Controller
             'end_at' => 'nullable|date|after_or_equal:start_at',
             'description' => 'nullable|string|max:2000',
             'location' => 'nullable|string|max:255',
+            'recurrence' => 'nullable|in:none,weekly,monthly,yearly',
         ]);
 
         $event->fill($data)->save();

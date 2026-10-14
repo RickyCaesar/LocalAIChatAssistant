@@ -535,6 +535,12 @@ export default function App() {
   }, [messages, loading, streamText]);
 
   useEffect(() => {
+    if (page !== 'chat') return;
+    const el = chatMainRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [page, activeId]);
+
+  useEffect(() => {
     if (!loading) return;
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(timer);

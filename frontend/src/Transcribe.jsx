@@ -8,7 +8,14 @@ export default function Transcribe() {
   const [meta, setMeta] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState('');
+  const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
+
+  const pickFile = (f) => {
+    if (!f) return;
+    setFile(f);
+    setError(null);
+  };
 
   const run = async () => {
     if (!file) return;
@@ -60,16 +67,25 @@ export default function Transcribe() {
         Unggah file audio (mp3, m4a, wav, ogg) untuk diubah menjadi teks.
       </p>
 
-      <div className={`mt-4 ${card}`}>
+      <div
+        className={`mt-4 ${card} transition ${dragging ? 'ring-2 ring-brand dark:ring-skyblue' : ''}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          pickFile(e.dataTransfer.files?.[0]);
+        }}
+      >
         <input
           ref={inputRef}
           type="file"
           accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac"
           className="hidden"
-          onChange={(e) => {
-            setFile(e.target.files?.[0] || null);
-            setError(null);
-          }}
+          onChange={(e) => pickFile(e.target.files?.[0])}
         />
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -80,7 +96,7 @@ export default function Transcribe() {
             Pilih file audio
           </button>
           <span className="min-w-0 flex-1 truncate text-sm text-slate-500 dark:text-slate-400">
-            {file ? file.name : 'Belum ada file dipilih'}
+            {file ? file.name : 'atau seret & lepas file audio ke sini'}
           </span>
           <button
             type="button"
