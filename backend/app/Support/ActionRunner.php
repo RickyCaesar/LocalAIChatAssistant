@@ -9,7 +9,7 @@ use App\Models\Todo;
 // Baris ACTION disaring dari teks yang tampak ke user dan diganti konfirmasi.
 class ActionRunner
 {
-    public static function run(string $text, ?int $userId): array
+    public static function run(string $text, ?int $userId, ?int $sessionId = null): array
     {
         $results = [];
         if (! $userId) {
@@ -27,6 +27,7 @@ class ActionRunner
                     'TODO_DEL' => self::todoDel($userId, $arg),
                     'EVENT_ADD' => self::eventAdd($userId, $arg),
                     'EVENT_DEL' => self::eventDel($userId, $arg),
+                    'DOC_BUILD' => self::docBuild($userId, $arg, $sessionId),
                     default => '✖ Perintah tidak dikenal: '.$cmd,
                 };
                 if ($r !== '') {
@@ -65,7 +66,8 @@ class ActionRunner
             ."ACTION: TODO_DONE <todo title or #id>\n"
             ."ACTION: TODO_DEL <todo title or #id>\n"
             ."ACTION: EVENT_ADD <YYYY-MM-DD HH:MM> | <title>\n"
-            ."ACTION: EVENT_DEL <#id>";
+            ."ACTION: EVENT_DEL <#id>\n"
+            ."ACTION: DOC_BUILD <single-line JSON> — build an XLSX spreadsheet and send it to the chat/Gallery. Schema: {\"filename\":\"name.xlsx\",\"sheet\":\"Sheet\",\"title\":\"Report title\",\"blocks\":[{\"heading\":\"Section\",\"columns\":[\"Col A\",\"Col B\"],\"rows\":[[\"a1\",\"b1\"],[\"a2\",\"b2\"]]}]}. Use multiple blocks for several titled tables/lists (e.g. a reviewer assignment table and an event rules list). Emit the entire JSON on ONE line.";
     }
 
     private static function todoAdd(int $userId, string $arg): string
@@ -157,6 +159,22 @@ class ActionRunner
         return $titles === []
             ? '✖ Event "'.$arg.'" tidak ditemukan.'
             : '✔ Event dihapus: "'.implode('", "', $titles).'".';
+    }
+
+    private static function docBuild(int $userId, string $arg, ?int $sessionId): string
+    {
+        $doc = json_decode($arg, true);
+        if (! is_array($doc)) {
+            return '✖ DOC_BUILD butuh JSON valid dalam satu baris.';
+        }
+
+        try {
+            $media = DocumentBuilder::save($doc, $userId, $sessionId);
+        } catch (\Throwable $e) {
+            return '✖ Gagal membuat dokumen: '.$e->getMessage();
+        }
+
+        return '✔ Dokumen dibuat: ['.$media->filename.'](/api/media/'.$media->id.')';
     }
 
     private static function stripActions(string $text): string

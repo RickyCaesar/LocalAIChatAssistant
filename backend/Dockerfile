@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-liberation \
         python3 \
         python3-venv \
-    && docker-php-ext-install mbstring zip bcmath pdo_mysql \
+    && docker-php-ext-install mbstring zip bcmath pdo_mysql pcntl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

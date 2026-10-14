@@ -1,6 +1,7 @@
 services:
   backend:
     build: ./backend
+    image: local-ai-chat-backend
     container_name: ai-chat-backend
     restart: unless-stopped
     ports:
@@ -12,6 +13,28 @@ services:
       - ${HOME}:${HOME}:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8000/api/health') ? 0 : 1);"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  queue-worker:
+    image: local-ai-chat-backend
+    container_name: ai-chat-queue-worker
+    restart: unless-stopped
+    command: php artisan queue:work --tries=3 --timeout=3600 --sleep=3
+    volumes:
+      - ./backend/.env:/app/.env:ro
+      - ./backend/database.sqlite:/app/database/database.sqlite
+      - ./backend/storage/app:/app/storage/app
+      - ${HOME}:${HOME}:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      backend:
+        condition: service_healthy
 
   frontend:
     build:

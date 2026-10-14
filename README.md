@@ -1,15 +1,16 @@
 # Local AI Chat Assistant
 
-Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lokal. Selain chat streaming, aplikasi ini menangani berkas (unggah, pratinjau, OCR, transkripsi audio), manajemen tugas & kalender, serta catatan rapat (notulensi). Frontend dan backend di-containerisasi dengan Docker Compose.
+Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lokal. Selain chat streaming, aplikasi ini menangani berkas (unggah, pratinjau, OCR, transkripsi audio), manajemen tugas & kalender, catatan rapat (notulensi), serta otomasi dokumen (spreadsheet). Proses berat seperti transkripsi audio dijalankan **asinkron di antrean (queue)** oleh container worker terpisah. Frontend dan backend di-containerisasi dengan Docker Compose.
 
 ## Fitur
 
 - **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka.
-- **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo dan event kalender, serta mengirim berkas hasil olahan.
+- **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), serta mengirim berkas hasil olahan.
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
 - **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pencarian**, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
-- **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper` di container backend; unggah via tombol atau **drag & drop**.
+- **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper`; unggah via tombol atau **drag & drop**. Diproses **asinkron di antrean** (container `queue-worker`) — UI menampilkan status dan mengisi hasil otomatis saat job selesai.
+- **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — mis. tabel penugasan reviewer atau daftar tata tertib acara — lalu mengirimnya ke chat/Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI.
 - **Todo List**: prioritas (tinggi/sedang/rendah), catatan, edit inline, due date + jam, filter Semua/Aktif/Selesai.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang (mingguan/bulanan/tahunan), edit/hapus. Bisa juga dikendalikan dari chat.
@@ -21,7 +22,9 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 - **Frontend:** React (Vite), Tailwind CSS, react-markdown
 - **Backend:** PHP + Laravel (HTTP Client, SQLite)
-- **STT:** faster-whisper (CPU, `int8`) di dalam container backend
+- **Antrean:** Laravel Queue dengan driver `database`, dijalankan oleh container `queue-worker` (`php artisan queue:work`)
+- **STT:** faster-whisper (CPU, `int8`) dijalankan dari job antrean
+- **Spreadsheet:** penulis XLSX minimal di `app/Support/DocumentBuilder.php` (memakai ekstensi `zip`, tanpa dependensi tambahan)
 - **Konversi PDF:** LibreOffice headless di dalam container backend
 - **Hari libur Indonesia:** pustaka `date-holidays` (offline, dihitung per tahun)
 - **AI Engine:** Hermes Agent lokal (gateway HTTP)
@@ -55,6 +58,12 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 > Kode backend/frontend **di-bake ke image**. Setiap perubahan kode perlu rebuild:
 > `docker compose up -d --build backend frontend` (atau salah satu saja).
+>
+> `docker compose up -d` juga menyalakan service **`queue-worker`** (memakai image
+> backend yang sama). Worker menunggu sampai backend lulus healthcheck, lalu
+> menjalankan `php artisan queue:work --tries=3 --timeout=3600`. Karena image-nya
+> sama, setelah rebuild backend jalankan `docker compose up -d backend queue-worker`
+> agar worker ikut memakai kode terbaru.
 
 ## Konfigurasi
 
@@ -70,6 +79,8 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 | `AI_SYSTEM_PROMPT` | — | instruksi sistem (termasuk cara mengirim berkas via baris `MEDIA:`) |
 | `HERMES_OUTPUT_HOST` | `.../storage/app/private` | folder keluaran berkas agent |
 | `CORS_ALLOWED_ORIGINS` | `*` | origin yang diizinkan |
+| `QUEUE_CONNECTION` | `database` | driver antrean; proses berat dijalankan oleh `queue-worker` |
+| `DB_QUEUE_RETRY_AFTER` | `3660` | kapan job boleh di-retry; **harus > `--timeout` worker** (3600) |
 
 ### Pengaturan dalam aplikasi (menu **Settings**, admin)
 
@@ -86,6 +97,31 @@ HERMES_HOME=/home/ROG/.hermes hermes gateway
 
 Gateway yang dipakai aplikasi: `GET /v1/models` (daftar model) dan `POST /v1/chat/completions` (chat). Folder `/home/ROG` di-mount read-only ke container agar agent bisa membaca sumber lokal dan menulis berkas hasil ke `HERMES_OUTPUT_HOST`.
 
+### Aksi dari chat (`ACTION:`)
+
+Selain mengirim berkas lewat baris `MEDIA:`, agent dapat memicu aksi berikut dari balasannya. Baris `ACTION:` disaring dari teks yang tampil ke user dan diganti konfirmasi:
+
+- `ACTION: TODO_ADD <judul>`, `TODO_DONE <judul|#id>`, `TODO_DEL <judul|#id>`
+- `ACTION: EVENT_ADD <YYYY-MM-DD HH:MM> | <judul>`, `EVENT_DEL <#id>`
+- `ACTION: DOC_BUILD <JSON satu baris>` — menyusun XLSX lalu mengirimnya ke chat/Gallery.
+
+Skema JSON `DOC_BUILD` (dijelaskan ke model lewat `ActionRunner::toolsInstruction()`):
+
+```json
+{
+  "filename": "penugasan-reviewer.xlsx",
+  "sheet": "TKA",
+  "title": "Penugasan Reviewer Tes Kemampuan Akademik",
+  "blocks": [
+    {"heading": "Jadwal", "columns": ["No", "Reviewer", "Tanggal", "Sesi"],
+     "rows": [["1", "Budi", "2026-05-01", "Pagi"]]},
+    {"heading": "Tata Tertib Acara", "rows": [["Datang 15 menit lebih awal"]]}
+  ]
+}
+```
+
+Tiap blok boleh punya `heading`, `columns` (baris header tebal), dan `rows`; `columns`/`rows` juga boleh di level atas (dianggap satu blok). Berkas disimpan ke penyimpanan media dan otomatis muncul di **Gallery**.
+
 ## Akun & Peran
 
 - Registrasi & login terbuka melalui `/api/register` dan `/api/login`.
@@ -98,8 +134,13 @@ Gateway yang dipakai aplikasi: `GET /v1/models` (daftar model) dan `POST /v1/cha
 backend/            Laravel API
   .env.example                contoh konfigurasi (salin ke .env)
   app/Http/Controllers/Api/   Auth, Chat, Media, Transcribe, Todo, Event, User, Skill, AI
-  app/Support/                FilePreview (ekstraksi teks/OCR), ActionRunner (aksi dari chat)
+  app/Jobs/TranscribeAudio.php   job antrean untuk transkripsi (faster-whisper)
+  app/Models/Transcription.php   status & hasil job STT (di-poll frontend)
+  app/Providers/AppServiceProvider.php  pragma SQLite (busy_timeout, journal mode)
+  app/Support/                FilePreview (ekstraksi teks/OCR), ActionRunner (aksi dari chat),
+                              DocumentBuilder (penulis XLSX minimal untuk DOC_BUILD)
   stt/transcribe.py           skrip faster-whisper
+  tests/document_builder_check.php  self-check penulis XLSX (php, tanpa framework)
   routes/api.php              definisi endpoint
 frontend/           React + Vite + Tailwind
   src/App.jsx                 shell, navigasi sidebar, chat
@@ -117,7 +158,7 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - **Sessions:** `GET|POST /api/sessions`, `PUT|DELETE /api/sessions/{id}`
 - **Chat:** `POST /api/chat` (streaming SSE), `GET /api/models`
 - **Media:** `GET|POST /api/media`, `GET|DELETE /api/media/{id}` (pratinjau inline; `?download=1` untuk unduh), `POST /api/media/{id}/pdf` (konversi berkas ke PDF)
-- **Transkripsi:** `POST /api/transcribe`
+- **Transkripsi (asinkron):** `POST /api/transcribe` (unggah → balas `{id, status}`), `GET /api/transcribe/{id}` (poll status & hasil)
 - **Todo:** `GET|POST /api/todos`, `PUT|DELETE /api/todos/{id}`
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
 - **Settings:** `GET /api/settings`, `POST /api/settings`, `POST /api/settings/model`
@@ -125,9 +166,12 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 
 ## Batasan Diketahui
 
-- `php artisan serve` berjalan single-thread: selama satu request panjang (mis. transkripsi) berjalan, request lain menunggu. Cukup untuk pemakaian lokal.
-- OCR dan ekstraksi dokumen dilakukan sinkron saat unggah; deck besar (banyak slide) bisa lambat.
-- Transkripsi berjalan di CPU (mode `int8`), sehingga model besar terasa lambat.
+- Transkripsi diproses **asinkron di antrean** oleh container `queue-worker`; inference tetap di CPU (mode `int8`) sehingga model besar terasa lambat, tetapi tidak lagi memblokir request lain.
+- OCR dan ekstraksi teks (gambar/dokumen) masih dilakukan **sinkron saat unggah**; berkas besar atau deck banyak slide bisa membuat unggahan lambat.
+- `php artisan serve` berjalan single-thread, jadi request berat yang belum dipindah ke antrean bisa saling menunggu. Cukup untuk pemakaian lokal.
+- Server dan `queue-worker` berbagi **satu file SQLite** yang di-mount sebagai file tunggal; karena itu mode jurnal dipaksa `delete` (bukan WAL) + `busy_timeout` 5s agar tidak "database is locked". Untuk konkurensi lebih berat, pindahkan DB ke direktori bersama (agar WAL bisa dipakai) atau ke Postgres.
+- `DocumentBuilder` menghasilkan XLSX minimal (tabel/daftar berjudul, header tebal) tanpa rumus/grafik/pivot, dan hanya mendukung `.xlsx`.
+- STT memakai `faster-whisper` (ffmpeg dibundel lewat PyAV), jadi `ffmpeg`/`whisper.cpp` tak diperlukan; base image backend adalah **Debian** (`php:8.2-cli`), bukan Alpine.
 - Berkas Office (DOCX/XLSX/PPTX) tak dirender native oleh browser; pratinjau menampilkan teks hasil ekstraksi. Untuk tata letak asli, konversikan ke PDF (LibreOffice mempertahankan format).
 - Konversi PDF berjalan sinkron (beberapa detik per berkas); LibreOffice memuat profil saat pertama kali dipanggil.
 - Hari libur dari `date-holidays` hanya mencakup libur nasional (`public`); cuti bersama tidak termasuk.

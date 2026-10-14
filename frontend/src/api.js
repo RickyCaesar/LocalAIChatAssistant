@@ -67,7 +67,8 @@ export async function apiUpload(imageFile) {
   return data;
 }
 
-// Upload an audio file for local speech-to-text. Long-running (returns text).
+// Upload an audio file and queue a background transcription job.
+// Returns { id, status, ... }; poll with apiTranscribeStatus().
 export async function apiTranscribe(audioFile) {
   const fd = new FormData();
   fd.append('audio', audioFile);
@@ -85,6 +86,11 @@ export async function apiTranscribe(audioFile) {
     throw new Error(data.detail || data.error || data.message || `Transkripsi gagal (${res.status}).`);
   }
   return data;
+}
+
+// Poll a queued transcription. Returns { status, text, language, duration, error }.
+export async function apiTranscribeStatus(id) {
+  return api(`/api/transcribe/${id}`);
 }
 
 // Stream the /api/chat response (SSE). Resolves with the final reply text.

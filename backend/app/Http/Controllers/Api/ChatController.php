@@ -289,7 +289,7 @@ class ChatController extends Controller
         $text = $this->saveReplyImages($text, $sessionId);
         $text = $this->importFileRefs($text, $sessionId);
 
-        [$clean, $results] = ActionRunner::run($text, auth()->id());
+        [$clean, $results] = ActionRunner::run($text, auth()->id(), $sessionId);
         if ($results !== []) {
             $clean .= "\n\n".implode("\n", $results);
         }

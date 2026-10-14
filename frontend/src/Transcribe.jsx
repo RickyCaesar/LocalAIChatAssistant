@@ -1,15 +1,20 @@
-import { useRef, useState } from 'react';
-import { apiTranscribe } from './api.js';
+import { useEffect, useRef, useState } from 'react';
+import { apiTranscribe, apiTranscribeStatus } from './api.js';
 
 export default function Transcribe() {
   const [file, setFile] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('idle'); // idle | pending | processing | done | error
   const [text, setText] = useState('');
   const [meta, setMeta] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState('');
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
+  const pollRef = useRef(null);
+
+  const busy = status === 'pending' || status === 'processing';
+
+  useEffect(() => () => clearInterval(pollRef.current), []);
 
   const pickFile = (f) => {
     if (!f) return;
@@ -19,24 +24,44 @@ export default function Transcribe() {
 
   const run = async () => {
     if (!file) return;
-    setBusy(true);
+    clearInterval(pollRef.current);
+    setStatus('pending');
     setError(null);
     setText('');
     setMeta(null);
     try {
-      const data = await apiTranscribe(file);
-      setText(data.text || '');
-      setMeta(data);
-      try {
-        if (data.text) localStorage.setItem('last-transcript', data.text);
-      } catch {
-        /* ignore */
-      }
-      if (!data.text) setError('Tidak ada teks yang terdeteksi dari audio ini.');
+      const job = await apiTranscribe(file);
+      setStatus(job.status || 'pending');
+      pollRef.current = setInterval(async () => {
+        try {
+          const s = await apiTranscribeStatus(job.id);
+          if (s.status === 'done') {
+            clearInterval(pollRef.current);
+            setStatus('done');
+            setText(s.text || '');
+            setMeta(s);
+            try {
+              if (s.text) localStorage.setItem('last-transcript', s.text);
+            } catch {
+              /* ignore */
+            }
+            if (!s.text) setError('Tidak ada teks yang terdeteksi dari audio ini.');
+          } else if (s.status === 'error') {
+            clearInterval(pollRef.current);
+            setStatus('error');
+            setError(s.error || 'Transkripsi gagal.');
+          } else {
+            setStatus(s.status);
+          }
+        } catch (e) {
+          clearInterval(pollRef.current);
+          setStatus('error');
+          setError(e.message);
+        }
+      }, 3000);
     } catch (e) {
+      setStatus('error');
       setError(e.message);
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -109,7 +134,8 @@ export default function Transcribe() {
         </div>
         {busy && (
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-            Sedang memproses audio di server. Audio panjang bisa butuh beberapa menit.
+            Sedang ditranskripsi di server
+            {status === 'pending' ? ' (menunggu antrean)' : ''}. Audio panjang bisa butuh beberapa menit.
           </p>
         )}
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}

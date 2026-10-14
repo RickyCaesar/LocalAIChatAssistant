@@ -34,6 +34,7 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::delete('/media/{id}', [MediaController::class, 'destroy']);
 
     Route::post('/transcribe', [TranscribeController::class, 'store']);
+    Route::get('/transcribe/{id}', [TranscribeController::class, 'show']);
 
     Route::get('/models', [AIController::class, 'models']);
 
