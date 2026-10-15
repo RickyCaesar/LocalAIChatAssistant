@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\Event;
 use App\Models\Todo;
+use App\Support\MarpGenerator;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 // Menjalankan ACTION: <...> yang dikeluarkan model Hermes di dalam balasannya.
 // Baris ACTION disaring dari teks yang tampak ke user dan diganti konfirmasi.
@@ -28,6 +30,7 @@ class ActionRunner
                     'EVENT_ADD' => self::eventAdd($userId, $arg),
                     'EVENT_DEL' => self::eventDel($userId, $arg),
                     'DOC_BUILD' => self::docBuild($userId, $arg, $sessionId),
+                    'GENERATE_PPTX' => self::generatePptx($userId, $arg, $sessionId),
                     default => '✖ Perintah tidak dikenal: '.$cmd,
                 };
                 if ($r !== '') {
@@ -67,7 +70,9 @@ class ActionRunner
             ."ACTION: TODO_DEL <todo title or #id>\n"
             ."ACTION: EVENT_ADD <YYYY-MM-DD HH:MM> | <title>\n"
             ."ACTION: EVENT_DEL <#id>\n"
-            ."ACTION: DOC_BUILD <single-line JSON> — build an XLSX spreadsheet and send it to the chat/Gallery. Schema: {\"filename\":\"name.xlsx\",\"sheet\":\"Sheet\",\"title\":\"Report title\",\"blocks\":[{\"heading\":\"Section\",\"columns\":[\"Col A\",\"Col B\"],\"rows\":[[\"a1\",\"b1\"],[\"a2\",\"b2\"]]}]}. Use multiple blocks for several titled tables/lists (e.g. a reviewer assignment table and an event rules list). Emit the entire JSON on ONE line.";
+            ."ACTION: DOC_BUILD <single-line JSON> — build an XLSX spreadsheet and send it to the chat/Gallery. Schema: {\"filename\":\"name.xlsx\",\"sheet\":\"Sheet\",\"title\":\"Report title\",\"blocks\":[{\"heading\":\"Section\",\"columns\":[\"Col A\",\"Col B\"],\"rows\":[[\"a1\",\"b1\"],[\"a2\",\"b2\"]]}]}. Use multiple blocks for several titled tables/lists.\n"
+            ."ACTION: GENERATE_PPTX\n"
+            ."<Marp Markdown — use --- to separate slides, frontmatter like `---\ntheme: default\nclass: invert\n---` to switch themes/dark mode. Include slide titles and brief bullets based on the user's request. The entire Marp content goes after this line on the next lines.> Emit the ACTION line and the Markdown immediately after it.";
     }
 
     private static function todoAdd(int $userId, string $arg): string
@@ -159,6 +164,27 @@ class ActionRunner
         return $titles === []
             ? '✖ Event "'.$arg.'" tidak ditemukan.'
             : '✔ Event dihapus: "'.implode('", "', $titles).'".';
+    }
+
+    private static function generatePptx(int $userId, string $arg, ?int $sessionId): string
+    {
+        $md = $arg;
+        if (strpos($md, '---') === false && trim($md) === '') {
+            $md = '';
+        }
+        if (trim($md) === '') {
+            return '✖ GENERATE_PPTX butuh konten Markdown Marp.';
+        }
+
+        try {
+            $media = MarpGenerator::generatePptx($md, $userId, $sessionId);
+
+            return '✔ Presentasi PPTX dibuat: ['.$media->filename.'](/api/media/'.$media->id.')';
+        } catch (ProcessFailedException $e) {
+            return '✖ Gagal membuat PPTX: '.preg_replace('/[\r\n]+/', ' ', $e->getMessage());
+        } catch (\Throwable $e) {
+            return '✖ Gagal membuat PPTX: '.$e->getMessage();
+        }
     }
 
     private static function docBuild(int $userId, string $arg, ?int $sessionId): string

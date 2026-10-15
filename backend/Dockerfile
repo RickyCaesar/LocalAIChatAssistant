@@ -15,7 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-liberation \
         python3 \
         python3-venv \
+        nodejs \
+        npm \
     && docker-php-ext-install mbstring zip bcmath pdo_mysql pcntl \
+    && npm install -g @marp-team/marp-cli@4.5.1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
