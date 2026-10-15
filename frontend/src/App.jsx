@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api, API_URL, clearToken, apiUpload, mediaUrl, mediaSrc, streamChat } from './api.js';
+import { api, API_URL, clearToken, apiUpload, mediaUrl, mediaSrc, streamChat, apiQueue, apiQueueCancel } from './api.js';
 import { getMediaById, refreshMedia } from './mediaStore.js';
 import AuthScreen from './AuthScreen.jsx';
 import Dashboard from './Dashboard.jsx';
@@ -12,6 +12,8 @@ import TodoList, { TodoIcon } from './Todo.jsx';
 import CalendarPage, { CalendarIcon } from './Calendar.jsx';
 import Transcribe from './Transcribe.jsx';
 import Notulensi from './Notulensi.jsx';
+import Convert from './Convert.jsx';
+import QueuePage from './Queue.jsx';
 import Skills from './Skills.jsx';
 
 const mediaSrcFor = mediaSrc;
@@ -370,7 +372,7 @@ function LogoutIcon() {
   );
 }
 
-function NavButton({ active, onClick, icon, label }) {
+function NavButton({ active, onClick, icon, label, badge }) {
   return (
     <button
       type="button"
@@ -382,7 +384,12 @@ function NavButton({ active, onClick, icon, label }) {
       }`}
     >
       {icon}
-      {label}
+      <span className="flex-1 text-left">{label}</span>
+      {badge > 0 && (
+        <span className="rounded-full bg-brand px-1.5 py-0.5 text-[0.65rem] font-semibold text-white dark:bg-skyblue dark:text-brand-900">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
@@ -437,6 +444,29 @@ function NotesIcon() {
   );
 }
 
+function ConvertIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
+  );
+}
+
+function QueueIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <line x1="8" x2="21" y1="6" y2="6" />
+      <line x1="8" x2="21" y1="12" y2="12" />
+      <line x1="8" x2="21" y1="18" y2="18" />
+      <circle cx="3.5" cy="6" r="1.5" />
+      <circle cx="3.5" cy="12" r="1.5" />
+      <circle cx="3.5" cy="18" r="1.5" />
+    </svg>
+  );
+}
+
 function SparklesIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -453,6 +483,7 @@ export default function App() {
   const [activeId, setActiveId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [page, setPage] = useState('chat');
+  const [queue, setQueue] = useState([]);
   const [input, setInput] = useState('');
   const [pendingImages, setPendingImages] = useState([]);
   const [uploadError, setUploadError] = useState(null);
@@ -504,6 +535,31 @@ export default function App() {
         setAuth(false);
       });
   }, [auth]);
+
+  // Global queue poll: runs while logged in regardless of the active page, so
+  // progress keeps updating when the user switches tabs.
+  const refreshQueue = useCallback(() => {
+    apiQueue()
+      .then((data) => setQueue(data.tasks || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!auth) {
+      setQueue([]);
+      return;
+    }
+    refreshQueue();
+    const timer = setInterval(refreshQueue, 3000);
+    return () => clearInterval(timer);
+  }, [auth, refreshQueue]);
+
+  const activeCount = queue.filter((t) => t.status === 'queued' || t.status === 'processing').length;
+  const runningTask = queue.find((t) => t.status === 'processing');
+
+  const cancelTask = (id) => {
+    apiQueueCancel(id).then(refreshQueue).catch(() => {});
+  };
 
   useEffect(() => {
     const onExpired = () => setAuth(false);
@@ -701,16 +757,16 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-cream text-slate-900 transition-colors dark:bg-brand-950 dark:text-slate-100">
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <div
+        className={`fixed inset-0 z-30 bg-black/40 transition-opacity duration-300 lg:hidden ${
+          sidebarOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        onClick={() => setSidebarOpen(false)}
+      />
       <aside
-        className={`w-64 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-brand ${
-          sidebarOpen ? 'flex' : 'hidden'
-        } max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-2xl`}
+        className={`flex w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-brand max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-2xl ${
+          sidebarOpen ? 'max-lg:translate-x-0 lg:ml-0' : 'max-lg:-translate-x-full lg:-ml-64'
+        }`}
       >
         <div className="border-b border-slate-200 p-3 dark:border-slate-800">
           <button
@@ -753,6 +809,19 @@ export default function App() {
               onClick={() => setPage('notulensi')}
               icon={<NotesIcon />}
               label="Notulensi"
+            />
+            <NavButton
+              active={page === 'convert'}
+              onClick={() => setPage('convert')}
+              icon={<ConvertIcon />}
+              label="ConvertToAudio"
+            />
+            <NavButton
+              active={page === 'queue'}
+              onClick={() => setPage('queue')}
+              icon={<QueueIcon />}
+              label="Antrean"
+              badge={activeCount}
             />
           </div>
         </div>
@@ -862,7 +931,11 @@ export default function App() {
                                 ? 'Transkrip Audio'
                                 : page === 'notulensi'
                                   ? 'Notulensi'
-                                  : page === 'skills'
+                                  : page === 'convert'
+                                    ? 'Konversi ke MP3'
+                                    : page === 'queue'
+                                      ? 'Antrean Proses'
+                                      : page === 'skills'
                                     ? 'Skill Hermes'
                                     : 'Settings'}
                 </h1>
@@ -870,6 +943,17 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              {activeCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setPage('queue')}
+                  title="Lihat antrean proses"
+                  className="mr-1 flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-cream dark:border-slate-700 dark:text-slate-300 dark:hover:bg-brand-800"
+                >
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-brand dark:bg-skyblue" />
+                  {runningTask ? `${runningTask.progress}%` : `${activeCount} antre`}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={logout}
@@ -1031,9 +1115,13 @@ export default function App() {
             ) : page === 'calendar' ? (
               <CalendarPage />
             ) : page === 'transcribe' ? (
-              <Transcribe />
+              <Transcribe queue={queue} refreshQueue={refreshQueue} />
             ) : page === 'notulensi' ? (
-              <Notulensi />
+              <Notulensi queue={queue} refreshQueue={refreshQueue} />
+            ) : page === 'convert' ? (
+              <Convert queue={queue} refreshQueue={refreshQueue} />
+            ) : page === 'queue' ? (
+              <QueuePage tasks={queue} onCancel={cancelTask} />
             ) : page === 'skills' ? (
               <Skills />
             ) : (

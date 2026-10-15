@@ -7,7 +7,6 @@ use App\Models\Media;
 use App\Models\Setting;
 use App\Support\FilePreview;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 
 class MediaController extends Controller

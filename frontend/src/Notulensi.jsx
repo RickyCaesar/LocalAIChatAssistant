@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { streamChat } from './api.js';
+import { apiQueueNotulensi } from './api.js';
+import { ProgressBar, formatEta } from './Queue.jsx';
 
-const PROMPT =
-  'Kamu adalah notulis rapat profesional. Dari transkrip/catatan berikut, buat notulensi rapi dalam bahasa Indonesia dengan bagian: Ringkasan, Poin Penting, Keputusan, dan Action Items. Jangan mengarang di luar isi.\n\nISI:\n';
+const STORE_KEY = 'task-notulensi';
 
-export default function Notulensi() {
+export default function Notulensi({ queue = [], refreshQueue }) {
   const [source, setSource] = useState('');
+  const [taskId, setTaskId] = useState(() => localStorage.getItem(STORE_KEY));
   const [minutes, setMinutes] = useState('');
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  const task = queue.find((t) => t.id === taskId) || null;
+  const busy = Boolean(task && (task.status === 'queued' || task.status === 'processing'));
+  const result = task?.result || null;
 
   useEffect(() => {
     // Prefill from the last transcription so Transkrip → Notulensi flows
@@ -24,18 +28,25 @@ export default function Notulensi() {
     }
   }, []);
 
+  useEffect(() => {
+    if (task?.status === 'done' && result) {
+      setMinutes((prev) => prev || result.text || '');
+    } else if (task?.status === 'error') {
+      setError(task.error || 'Gagal menyusun notulensi.');
+    }
+  }, [task?.status, task?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const run = async () => {
     if (!source.trim()) return;
-    setBusy(true);
     setError(null);
     setMinutes('');
     try {
-      const out = await streamChat({ message: PROMPT + source }, () => {});
-      setMinutes(out || '');
+      const job = await apiQueueNotulensi(source);
+      setTaskId(job.id);
+      localStorage.setItem(STORE_KEY, job.id);
+      refreshQueue?.();
     } catch (e) {
       setError(e.message);
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -53,7 +64,7 @@ export default function Notulensi() {
     <div className="mx-auto max-w-3xl px-4 py-6">
       <h2 className="text-lg font-semibold">Notulensi</h2>
       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-        Tempel transkrip atau catatan, lalu susun notulensi rapi dengan AI.
+        Tempel transkrip atau catatan, lalu susun notulensi rapi dengan AI di antrean.
       </p>
 
       <div className={`mt-4 ${card}`}>
@@ -74,6 +85,22 @@ export default function Notulensi() {
         </button>
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
       </div>
+
+      {busy && (
+        <div className={`mt-4 ${card}`}>
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>
+              {task.status === 'queued'
+                ? `Menunggu antrean${task.position >= 0 ? ` (ke-${task.position + 1})` : ''}...`
+                : `AI menyusun notulensi · ${task.progress}%`}
+            </span>
+            {task.eta != null && <span>sisa {formatEta(task.eta)}</span>}
+          </div>
+          <div className="mt-2">
+            <ProgressBar value={task.progress} />
+          </div>
+        </div>
+      )}
 
       {minutes && (
         <div className={`mt-4 ${card}`}>

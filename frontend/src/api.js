@@ -67,12 +67,9 @@ export async function apiUpload(imageFile) {
   return data;
 }
 
-// Upload an audio file and queue a background transcription job.
-// Returns { id, status, ... }; poll with apiTranscribeStatus().
-export async function apiTranscribe(audioFile) {
-  const fd = new FormData();
-  fd.append('audio', audioFile);
-  const res = await fetch(`${API_URL}/api/transcribe`, {
+// Multipart POST for queue endpoints (transcribe/convert). Returns the task.
+async function apiUploadTo(path, fd) {
+  const res = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${getToken()}`, Accept: 'application/json' },
     body: fd,
@@ -83,14 +80,37 @@ export async function apiTranscribe(audioFile) {
     window.dispatchEvent(new CustomEvent('hermes-auth-expired'));
   }
   if (!res.ok) {
-    throw new Error(data.detail || data.error || data.message || `Transkripsi gagal (${res.status}).`);
+    throw new Error(data.detail || data.error || data.message || `Request gagal (${res.status}).`);
   }
   return data;
 }
 
-// Poll a queued transcription. Returns { status, text, language, duration, error }.
-export async function apiTranscribeStatus(id) {
-  return api(`/api/transcribe/${id}`);
+// Queue a background transcription. Returns a task { id, status, ... }.
+export function apiQueueTranscribe(audioFile) {
+  const fd = new FormData();
+  fd.append('audio', audioFile);
+  return apiUploadTo('/api/queue/transcribe', fd);
+}
+
+// Queue a video -> MP3 conversion. Returns a task.
+export function apiQueueConvert(videoFile) {
+  const fd = new FormData();
+  fd.append('video', videoFile);
+  return apiUploadTo('/api/queue/convert', fd);
+}
+
+// Queue the AI notulensi build from a transcript.
+export function apiQueueNotulensi(source) {
+  return api('/api/queue/notulensi', { method: 'POST', body: JSON.stringify({ source }) });
+}
+
+// The whole queue for the current user (active first is done client-side).
+export function apiQueue() {
+  return api('/api/queue');
+}
+
+export function apiQueueCancel(id) {
+  return api(`/api/queue/${id}`, { method: 'DELETE' });
 }
 
 // Stream the /api/chat response (SSE). Resolves with the final reply text.

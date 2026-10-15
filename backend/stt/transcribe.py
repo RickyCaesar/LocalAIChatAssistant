@@ -38,7 +38,15 @@ def main() -> int:
             vad_filter=True,
             beam_size=1,
         )
-        parts = [seg.text.strip() for seg in segments if seg.text and seg.text.strip()]
+        total = float(getattr(info, "duration", 0.0) or 0.0)
+        parts = []
+        for seg in segments:
+            if seg.text and seg.text.strip():
+                parts.append(seg.text.strip())
+            if total > 0:
+                # Progres dibaca job Laravel dari stderr ("PROGRESS <pct>").
+                pct = int(min(99, max(1, (float(seg.end) / total) * 100)))
+                print(f"PROGRESS {pct}", file=sys.stderr, flush=True)
     except Exception as exc:  # pragma: no cover
         print(f"transcription failed: {exc}", file=sys.stderr)
         return 1

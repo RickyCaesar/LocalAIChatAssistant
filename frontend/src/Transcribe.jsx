@@ -1,20 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
-import { apiTranscribe, apiTranscribeStatus } from './api.js';
+import { apiQueueTranscribe } from './api.js';
+import { ProgressBar, formatEta } from './Queue.jsx';
 
-export default function Transcribe() {
+const STORE_KEY = 'task-transcribe';
+
+export default function Transcribe({ queue = [], refreshQueue }) {
   const [file, setFile] = useState(null);
-  const [status, setStatus] = useState('idle'); // idle | pending | processing | done | error
+  const [taskId, setTaskId] = useState(() => localStorage.getItem(STORE_KEY));
   const [text, setText] = useState('');
-  const [meta, setMeta] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState('');
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
-  const pollRef = useRef(null);
 
-  const busy = status === 'pending' || status === 'processing';
+  const task = queue.find((t) => t.id === taskId) || null;
+  const busy = Boolean(task && (task.status === 'queued' || task.status === 'processing'));
+  const result = task?.result || null;
 
-  useEffect(() => () => clearInterval(pollRef.current), []);
+  useEffect(() => {
+    if (task?.status === 'done' && result) {
+      setText((prev) => prev || result.text || '');
+      try {
+        if (result.text) localStorage.setItem('last-transcript', result.text);
+      } catch {
+        /* ignore */
+      }
+    } else if (task?.status === 'error') {
+      setError(task.error || 'Transkripsi gagal.');
+    }
+  }, [task?.status, task?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pickFile = (f) => {
     if (!f) return;
@@ -24,43 +38,14 @@ export default function Transcribe() {
 
   const run = async () => {
     if (!file) return;
-    clearInterval(pollRef.current);
-    setStatus('pending');
     setError(null);
     setText('');
-    setMeta(null);
     try {
-      const job = await apiTranscribe(file);
-      setStatus(job.status || 'pending');
-      pollRef.current = setInterval(async () => {
-        try {
-          const s = await apiTranscribeStatus(job.id);
-          if (s.status === 'done') {
-            clearInterval(pollRef.current);
-            setStatus('done');
-            setText(s.text || '');
-            setMeta(s);
-            try {
-              if (s.text) localStorage.setItem('last-transcript', s.text);
-            } catch {
-              /* ignore */
-            }
-            if (!s.text) setError('Tidak ada teks yang terdeteksi dari audio ini.');
-          } else if (s.status === 'error') {
-            clearInterval(pollRef.current);
-            setStatus('error');
-            setError(s.error || 'Transkripsi gagal.');
-          } else {
-            setStatus(s.status);
-          }
-        } catch (e) {
-          clearInterval(pollRef.current);
-          setStatus('error');
-          setError(e.message);
-        }
-      }, 3000);
+      const job = await apiQueueTranscribe(file);
+      setTaskId(job.id);
+      localStorage.setItem(STORE_KEY, job.id);
+      refreshQueue?.();
     } catch (e) {
-      setStatus('error');
       setError(e.message);
     }
   };
@@ -89,7 +74,7 @@ export default function Transcribe() {
     <div className="mx-auto max-w-3xl px-4 py-6">
       <h2 className="text-lg font-semibold">Transkrip Audio</h2>
       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-        Unggah file audio (mp3, m4a, wav, ogg) untuk diubah menjadi teks.
+        Unggah file audio (mp3, m4a, wav, ogg) untuk diubah menjadi teks. Proses berjalan di antrean.
       </p>
 
       <div
@@ -132,25 +117,43 @@ export default function Transcribe() {
             {busy ? 'Memproses...' : 'Transkrip'}
           </button>
         </div>
-        {busy && (
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-            Sedang ditranskripsi di server
-            {status === 'pending' ? ' (menunggu antrean)' : ''}. Audio panjang bisa butuh beberapa menit.
-          </p>
-        )}
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
       </div>
 
-      {text && (
+      {busy && (
+        <div className={`mt-4 ${card}`}>
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>
+              {task.status === 'queued'
+                ? `Menunggu antrean${task.position >= 0 ? ` (ke-${task.position + 1})` : ''}...`
+                : `Transkripsi berjalan · ${task.progress}%`}
+            </span>
+            {task.eta != null && <span>sisa {formatEta(task.eta)}</span>}
+          </div>
+          <div className="mt-2">
+            <ProgressBar value={task.progress} />
+          </div>
+        </div>
+      )}
+
+      {(text || result) && (
         <div className={`mt-4 ${card}`}>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Hasil transkrip</h3>
-            <div className="flex items-center gap-2 text-xs">
-              {meta?.language && <span className="text-slate-400">[{meta.language}]</span>}
-              <button type="button" onClick={() => copy(text, 'text')} className="rounded-lg px-2 py-1 font-medium text-brand transition hover:bg-cream dark:text-skyblue dark:hover:bg-brand-800">
-                {copied === 'text' ? 'Tersalin' : 'Salin'}
+            <h3 className="text-sm font-semibold">Hasil transkripsi</h3>
+            <div className="flex items-center gap-3">
+              {result?.language && <span className="text-xs text-slate-400">{result.language}</span>}
+              <button
+                type="button"
+                onClick={() => copy(text, 'all')}
+                className="text-xs font-medium text-brand transition hover:opacity-70 dark:text-skyblue"
+              >
+                {copied ? 'Tersalin' : 'Salin'}
               </button>
-              <button type="button" onClick={download} className="rounded-lg px-2 py-1 font-medium text-brand transition hover:bg-cream dark:text-skyblue dark:hover:bg-brand-800">
+              <button
+                type="button"
+                onClick={download}
+                className="text-xs font-medium text-brand transition hover:opacity-70 dark:text-skyblue"
+              >
                 Unduh .txt
               </button>
             </div>

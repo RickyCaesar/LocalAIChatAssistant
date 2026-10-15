@@ -5,10 +5,10 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\MediaController;
+use App\Http\Controllers\Api\QueueController;
 use App\Http\Controllers\Api\SessionController;
 use App\Http\Controllers\Api\SkillController;
 use App\Http\Controllers\Api\TodoController;
-use App\Http\Controllers\Api\TranscribeController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\EnsureBearerToken;
 use Illuminate\Support\Facades\Route;
@@ -33,8 +33,12 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::post('/media/{id}/pdf', [MediaController::class, 'toPdf']);
     Route::delete('/media/{id}', [MediaController::class, 'destroy']);
 
-    Route::post('/transcribe', [TranscribeController::class, 'store']);
-    Route::get('/transcribe/{id}', [TranscribeController::class, 'show']);
+    Route::get('/queue', [QueueController::class, 'index']);
+    Route::get('/queue/{id}', [QueueController::class, 'show']);
+    Route::post('/queue/transcribe', [QueueController::class, 'storeTranscribe']);
+    Route::post('/queue/convert', [QueueController::class, 'storeConvert']);
+    Route::post('/queue/notulensi', [QueueController::class, 'storeNotulensi']);
+    Route::delete('/queue/{id}', [QueueController::class, 'destroy']);
 
     Route::get('/models', [AIController::class, 'models']);
 
