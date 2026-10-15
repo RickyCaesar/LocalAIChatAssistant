@@ -14,6 +14,18 @@ export function formatEta(seconds) {
   return `±${(minutes / 60).toFixed(1)} jam`;
 }
 
+function downloadText(name, text) {
+  const slug = String(name || 'hasil').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${slug || 'hasil'}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function ProgressBar({ value }) {
   const pct = Math.max(2, Math.min(100, Number(value) || 0));
   return (
@@ -77,19 +89,29 @@ function TaskRow({ task, onCancel }) {
       )}
 
       {task.status === 'done' && (
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-          {task.result?.url && (
-            <a
-              href={`${mediaSrc(task.result.url)}&download=1`}
-              download={task.result.filename}
-              className="font-medium text-brand hover:opacity-70 dark:text-skyblue"
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          {task.result?.text ? (
+            <button
+              type="button"
+              onClick={() =>
+                downloadText(task.title || task.type, task.result.text)
+              }
+              className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 dark:bg-skyblue dark:text-brand-900"
             >
-              Unduh {task.result.filename}
+              Unduh hasil
+            </button>
+          ) : task.result?.url ? (
+            <a
+              href={mediaSrc(task.result.url)}
+              download
+              className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 dark:bg-skyblue dark:text-brand-900"
+            >
+              Unduh hasil
             </a>
-          )}
-          {typeof task.result?.text === 'string' && task.result.text !== '' && (
-            <span className="min-w-0 flex-1 truncate text-slate-500 dark:text-slate-400">
-              {task.result.text.slice(0, 120)}
+          ) : null}
+          {task.result?.text && (
+            <span className="min-w-0 flex-1 truncate text-xs text-slate-500 dark:text-slate-400">
+              {task.result.text.slice(0, 160)}
             </span>
           )}
         </div>
@@ -103,6 +125,20 @@ function TaskRow({ task, onCancel }) {
         >
           Batalkan
         </button>
+      )}
+      {(task.status === 'done' || task.status === 'error') && onCancel && (
+        <button
+          type="button"
+          onClick={() => onCancel(task.id)}
+          className="mt-2 text-xs font-medium text-slate-500 transition hover:opacity-70 dark:text-slate-400"
+        >
+          Hapus dari riwayat
+        </button>
+      )}
+      {task.status === 'done' && task.duration != null && (
+        <p className="mt-1 text-[0.7rem] text-slate-400 dark:text-slate-500">
+          Waktu: {Math.floor(task.duration / 60) > 0 ? `${Math.floor(task.duration / 60)}m ` : ''}{task.duration % 60}s
+        </p>
       )}
     </div>
   );

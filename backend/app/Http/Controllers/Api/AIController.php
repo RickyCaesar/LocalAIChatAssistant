@@ -137,8 +137,43 @@ class AIController extends Controller
             'by_day' => $byDay,
             'by_model' => $byModel,
             'by_user' => $byUser,
+            'queue' => $this->queueStats(),
+            'content' => $this->contentStats(),
             'hermes_status' => $this->hermesStatus(),
         ]);
+    }
+
+    private function queueStats(): array
+    {
+        $done = \App\Models\Task::where('status', 'done');
+        $avg = (int) round((clone $done)->whereNotNull('duration_seconds')->avg('duration_seconds') ?? 0);
+
+        return [
+            'total' => \App\Models\Task::count(),
+            'done' => (clone $done)->count(),
+            'error' => \App\Models\Task::where('status', 'error')->count(),
+            'active' => \App\Models\Task::whereIn('status', ['queued', 'processing'])->count(),
+            'avg_duration' => $avg,
+            'by_type' => \App\Models\Task::selectRaw('type, COUNT(*) as total, AVG(duration_seconds) as avg_duration')
+                ->groupBy('type')
+                ->orderByDesc('total')
+                ->get()
+                ->map(fn ($t) => [
+                    'type' => (string) $t->type,
+                    'count' => (int) $t->total,
+                    'avg_duration' => (int) round((float) $t->avg_duration),
+                ]),
+        ];
+    }
+
+    private function contentStats(): array
+    {
+        return [
+            'sessions' => \App\Models\ChatSession::count(),
+            'media' => \App\Models\Media::count(),
+            'todos' => \App\Models\Todo::count(),
+            'events' => \App\Models\Event::count(),
+        ];
     }
 
     public function settings()

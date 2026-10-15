@@ -26,6 +26,8 @@ class QueueController extends Controller
             'status' => $task->status,
             'progress' => (int) $task->progress,
             'eta' => $eta,
+            'duration' => $task->duration,
+            'duration_seconds' => $task->duration,
             'position' => $position,
             'result' => $task->result,
             'error' => $task->error,
@@ -151,15 +153,23 @@ class QueueController extends Controller
     {
         $task = Task::where('user_id', auth()->id())->findOrFail($id);
 
-        // ponytail: hanya antrean yang bisa dibatalkan; tugas yang sedang jalan
-        // tak bisa dihentikan paksa (worker sedang di tengah proses).
-        if ($task->status !== 'queued') {
-            return response()->json(['error' => 'Tugas sudah diproses, tidak bisa dibatalkan.'], 409);
+        // ponytail: tugas yang sedang diproses tak bisa dihentikan paksa (worker
+        // sedang di tengah proses). Selain itu boleh dihapus dari antrean/riwayat.
+        if ($task->status === 'processing') {
+            return response()->json(['error' => 'Tugas sedang diproses, tidak bisa dibatalkan.'], 409);
         }
 
         if ($task->payload['path'] ?? null) {
             @unlink(storage_path('app/'.$task->payload['path']));
         }
+
+        if ($mediaId = $task->result['media_id'] ?? null) {
+            if ($media = \App\Models\Media::find($mediaId)) {
+                @unlink(storage_path('app/private/'.$media->path));
+                $media->delete();
+            }
+        }
+
         $task->delete();
 
         return response()->json(['ok' => true]);

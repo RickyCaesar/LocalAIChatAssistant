@@ -40,7 +40,7 @@ class Task extends Model
             return $this->duration_seconds;
         }
         if ($this->started_at && $this->finished_at) {
-            return $this->finished_at->diffInSeconds($this->started_at);
+            return max(0, $this->finished_at->diffInSeconds($this->started_at, false));
         }
 
         return null;

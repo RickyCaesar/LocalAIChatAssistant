@@ -59,7 +59,17 @@ class RunTask implements ShouldQueue
             'status' => 'error',
             'error' => $e->getMessage(),
             'finished_at' => now(),
+            'duration_seconds' => $this->getTaskDuration($this->taskId),
         ]);
+    }
+
+    private function getTaskDuration(int $id): ?int
+    {
+        $task = Task::find($id);
+        if ($task && $task->started_at) {
+            return max(0, now()->diffInSeconds($task->started_at, false));
+        }
+        return null;
     }
 
     private function runConvert(Task $task): void
