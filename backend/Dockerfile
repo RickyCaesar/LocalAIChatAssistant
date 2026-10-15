@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-venv \
         nodejs \
         npm \
+        chromium \
     && docker-php-ext-install mbstring zip bcmath pdo_mysql pcntl \
     && npm install -g @marp-team/marp-cli@4.5.1 \
     && apt-get clean \

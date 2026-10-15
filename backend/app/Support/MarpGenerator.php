@@ -33,6 +33,8 @@ class MarpGenerator
             '--pptx',
             '-o',
             $out,
+        ], [
+            'env' => array_merge($_ENV, ['CHROME_PATH' => '/usr/bin/chromium']),
         ]);
 
         @unlink($temp);
