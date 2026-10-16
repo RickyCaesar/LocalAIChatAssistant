@@ -5,20 +5,21 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 ## Fitur
 
 - **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka.
-- **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), serta mengirim berkas hasil olahan.
+- **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), menyusun presentasi (PPTX) bertema, serta mengirim berkas hasil olahan.
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
 - **Konversi video ke MP3** (menu **ConvertToAudio**): video (MP4/MKV/MOV/…) atau berkas audio lain → MP3. Memakai PyAV (venv STT yang sudah ada), jadi tak perlu `ffmpeg` sistem. Diproses **asinkron di antrean**.
 - **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pencarian**, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
 - **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper`; unggah via tombol atau **drag & drop**. Diproses **asinkron di antrean** (container `queue-worker`).
-- **Antrean proses (menu Antrean)**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi) dengan status, **persentase progres**, **estimasi selesai**, dan posisi dalam antrean. Indikator ringkas tampil di header dari menu mana pun, dan progres tetap berjalan saat berpindah menu.
+- **Antrean proses (menu Antrean)**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, dan posisi dalam antrean. Indikator ringkas tampil di header dari menu mana pun, dan progres tetap berjalan saat berpindah menu.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — mis. tabel penugasan reviewer atau daftar tata tertib acara — lalu mengirimnya ke chat/Gallery.
+- **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
 - **Todo List**: prioritas (tinggi/sedang/rendah), catatan, edit inline, due date + jam, filter Semua/Aktif/Selesai.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang (mingguan/bulanan/tahunan), edit/hapus. Bisa juga dikendalikan dari chat.
-- **Pengaturan**: model AI, timeout, batas ukuran unggah, model & bahasa transkripsi, dan tema tampilan (Klasik/Senja/Mint).
+- **Pengaturan**: model AI, timeout, batas ukuran unggah, model & bahasa transkripsi, **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau).
 - **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent.
-- **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik, Kelola Pengguna, Skill, Settings).
+- **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik — termasuk **kartu kuota/kredit Hermes**, Kelola Pengguna, Skill, Settings).
 
 ## Teknologi
 
@@ -28,6 +29,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **STT & audio:** faster-whisper (CPU, `int8`) untuk transkripsi; PyAV untuk ekstraksi audio → MP3. Keduanya memancarkan progres ke job.
 - **Spreadsheet:** penulis XLSX minimal di `app/Support/DocumentBuilder.php` (memakai ekstensi `zip`, tanpa dependensi tambahan)
 - **Konversi PDF:** LibreOffice headless di dalam container backend
+- **Presentasi PPTX:** `@marp-team/marp-cli` + Chromium (sudah ada di image backend) untuk merender Marp Markdown → `.pptx`
 - **Hari libur Indonesia:** pustaka `date-holidays` (offline, dihitung per tahun)
 - **AI Engine:** Hermes Agent lokal (gateway HTTP)
 - **Deployment:** Docker & Docker Compose
@@ -80,13 +82,14 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 | `AI_TEMPERATURE` | `0.7` | suhu sampling |
 | `AI_SYSTEM_PROMPT` | — | instruksi sistem (termasuk cara mengirim berkas via baris `MEDIA:`) |
 | `HERMES_OUTPUT_HOST` | `.../storage/app/private` | folder keluaran berkas agent |
+| `HERMES_AUTH_FILE` | `/home/ROG/.hermes/auth.json` | (opsional) berkas kredensial Hermes; dipakai kartu kuota/kredit di Dashboard |
 | `CORS_ALLOWED_ORIGINS` | `*` | origin yang diizinkan |
 | `QUEUE_CONNECTION` | `database` | driver antrean; proses berat dijalankan oleh `queue-worker` |
 | `DB_QUEUE_RETRY_AFTER` | `3660` | kapan job boleh di-retry; **harus > `--timeout` worker** (3600) |
 
 ### Pengaturan dalam aplikasi (menu **Settings**, admin)
 
-Tersimpan di DB (model `Setting`): `ai_model`, `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`, dan pilihan tema.
+Tersimpan di DB (model `Setting`): `ai_model`, `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`. Pilihan **tema** (terang & gelap) disimpan di `localStorage` browser, bukan di server.
 
 ## Integrasi dengan Hermes Agent
 
@@ -136,12 +139,14 @@ Tiap blok boleh punya `heading`, `columns` (baris header tebal), dan `rows`; `co
 backend/            Laravel API
   .env.example                contoh konfigurasi (salin ke .env)
   app/Http/Controllers/Api/   Auth, Chat, Media, Queue, Todo, Event, User, Skill, AI
-  app/Jobs/RunTask.php        job antrean generik (convert / transcribe / notulensi)
+  app/Jobs/RunTask.php        job antrean generik (convert / transcribe / notulensi / pptx)
   app/Models/Task.php         status, progress & hasil tiap tugas antrean
   app/Support/Eta.php         rumus estimasi selesai (elapsed/progress)
   app/Providers/AppServiceProvider.php  pragma SQLite (busy_timeout, journal mode)
   app/Support/                FilePreview (ekstraksi teks/OCR), ActionRunner (aksi dari chat),
-                              DocumentBuilder (penulis XLSX minimal untuk DOC_BUILD)
+                              DocumentBuilder (penulis XLSX minimal untuk DOC_BUILD),
+                              MarpGenerator (Marp Markdown → PPTX via marp-cli + Chromium)
+  resources/marp/notebook.css tema Marp (variabel warna di-inject dari pilihan tema)
   stt/transcribe.py           skrip faster-whisper (memancarkan progres)
   stt/toaudio.py              ekstrak audio → MP3 via PyAV (memancarkan progres)
   tests/document_builder_check.php  self-check penulis XLSX (php, tanpa framework)
@@ -149,8 +154,9 @@ backend/            Laravel API
   routes/api.php              definisi endpoint
 frontend/           React + Vite + Tailwind
   src/App.jsx                 shell, navigasi sidebar, chat, polling antrean global
-  src/*.jsx                   Gallery, Todo, Calendar, Transcribe, Convert, Notulensi, Queue, Skills, Settings, Users, Dashboard
+  src/*.jsx                   Gallery, Todo, Calendar, Transcribe, Convert, Presentasi, Notulensi, Queue, Skills, Settings, Users, Dashboard
   src/holidays.js             helper hari libur Indonesia (date-holidays)
+  src/theme.css               override utilitas Tailwind agar memakai variabel tema (diimpor setelah index.css)
 tools/topdf.sh      konversi dokumen → PDF via container (dipakai agent dari chat)
 docker-compose.yml
 ```
@@ -164,6 +170,7 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - **Chat:** `POST /api/chat` (streaming SSE), `GET /api/models`
 - **Media:** `GET|POST /api/media`, `GET|DELETE /api/media/{id}` (pratinjau inline; `?download=1` untuk unduh), `POST /api/media/{id}/pdf` (konversi berkas ke PDF)
 - **Antrean (asinkron):** `GET /api/queue` (daftar tugas + progress/ETA/posisi), `GET /api/queue/{id}`, `DELETE /api/queue/{id}` (batalkan yang masih menunggu), `POST /api/queue/transcribe` (unggah audio), `POST /api/queue/convert` (unggah video → MP3), `POST /api/queue/notulensi` (`{source}`)
+- **Presentasi:** `POST /api/presentations` (Marp Markdown → PPTX, **asinkron**), `POST /api/presentations/draft` (AI menyusun draft Marp Markdown)
 - **Todo:** `GET|POST /api/todos`, `PUT|DELETE /api/todos/{id}`
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
 - **Settings:** `GET /api/settings`, `POST /api/settings`, `POST /api/settings/model`
@@ -177,6 +184,8 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - `php artisan serve` berjalan single-thread, jadi request berat yang belum dipindah ke antrean bisa saling menunggu. Cukup untuk pemakaian lokal.
 - Server dan `queue-worker` berbagi **satu file SQLite** yang di-mount sebagai file tunggal; karena itu mode jurnal dipaksa `delete` (bukan WAL) + `busy_timeout` 5s agar tidak "database is locked". Untuk konkurensi lebih berat, pindahkan DB ke direktori bersama (agar WAL bisa dipakai) atau ke Postgres.
 - `DocumentBuilder` menghasilkan XLSX minimal (tabel/daftar berjudul, header tebal) tanpa rumus/grafik/pivot, dan hanya mendukung `.xlsx`.
+- Pembuatan PPTX memakai **marp-cli + Chromium** (Chromium sudah ada untuk konversi). Tema presentasi adalah **6 set tetap**; menambah tema = entri di `Presentasi.jsx` + variabel CSS Marp.
+- **Urutan CSS penting**: `theme.css` harus diimpor **setelah** `index.css` (setelah Tailwind) agar variabel tema menang atas utilitas Tailwind yang ber-hex statis. Dijaga oleh `main.jsx`; lihat komentar di kedua berkas.
 - STT memakai `faster-whisper` (ffmpeg dibundel lewat PyAV), jadi `ffmpeg`/`whisper.cpp` tak diperlukan; base image backend adalah **Debian** (`php:8.2-cli`), bukan Alpine.
 - Berkas Office (DOCX/XLSX/PPTX) tak dirender native oleh browser; pratinjau menampilkan teks hasil ekstraksi. Untuk tata letak asli, konversikan ke PDF (LibreOffice mempertahankan format).
 - Konversi PDF berjalan sinkron (beberapa detik per berkas); LibreOffice memuat profil saat pertama kali dipanggil.
