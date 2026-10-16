@@ -104,6 +104,23 @@ export function apiQueueNotulensi(source) {
   return api('/api/queue/notulensi', { method: 'POST', body: JSON.stringify({ source }) });
 }
 
+// Queue a PowerPoint build from Marp markdown. Returns a task { id, status, ... }.
+export function apiGeneratePptx(markdown, filename, theme) {
+  return api('/api/presentations', {
+    method: 'POST',
+    body: JSON.stringify({ markdown, filename, theme }),
+  });
+}
+
+// Ask Hermes to draft Marp markdown. `material` is optional extracted text
+// (from an uploaded PDF/docx/etc.) to ground the deck. Returns { markdown }.
+export function apiDraftPresentation(prompt, material) {
+  return api('/api/presentations/draft', {
+    method: 'POST',
+    body: JSON.stringify({ prompt, material: material || undefined }),
+  });
+}
+
 // The whole queue for the current user (active first is done client-side).
 export function apiQueue() {
   return api('/api/queue');
@@ -111,6 +128,11 @@ export function apiQueue() {
 
 export function apiQueueCancel(id) {
   return api(`/api/queue/${id}`, { method: 'DELETE' });
+}
+
+// Single task by id (for polling a build).
+export function apiQueueTask(id) {
+  return api(`/api/queue/${id}`);
 }
 
 // Stream the /api/chat response (SSE). Resolves with the final reply text.

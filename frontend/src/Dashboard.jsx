@@ -111,8 +111,70 @@ function BarList({ items, color = 'bg-brand dark:bg-skyblue' }) {
   );
 }
 
-export default function Dashboard() {
-  const [data, setData] = useState(null);
+function UsageCard({ usage }) {
+  if (!usage) return null;
+
+  if (!usage.available) {
+    return (
+      <Card title="Kuota Hermes Agent">
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{usage.reason || 'Info kuota tidak tersedia.'}</p>
+      </Card>
+    );
+  }
+
+  const fmtUsd = (v) => `$${Number(v || 0).toFixed(2)}`;
+  const monthly = Number(usage.monthly_credits || 0);
+  const remaining = Number(usage.credits_remaining || 0);
+  const usedPct = monthly > 0 ? Math.min(100, Math.max(0, ((monthly - remaining) / monthly) * 100)) : 0;
+  const reset = usage.period_end ? new Date(usage.period_end).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+
+  return (
+    <Card title="Kuota Hermes Agent">
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="rounded-lg bg-brand px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white dark:bg-skyblue dark:text-brand-900">
+          {usage.plan || 'Free'}
+        </span>
+        <span className="truncate font-mono text-xs text-slate-400">{usage.model}</span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-xl bg-slate-50 p-2 dark:bg-brand-800">
+          <p className="text-lg font-semibold">{fmtUsd(remaining)}</p>
+          <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Kredit sisa</p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-2 dark:bg-brand-800">
+          <p className="text-lg font-semibold">{fmtUsd(usage.purchased_credits_remaining)}</p>
+          <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Top-up</p>
+        </div>
+        <div className="rounded-xl bg-slate-50 p-2 dark:bg-brand-800">
+          <p className="text-lg font-semibold">{fmtUsd(usage.total_usable_credits)}</p>
+          <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Total tersedia</p>
+        </div>
+      </div>
+
+      {monthly > 0 && (
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>Kuota bulanan</span>
+            <span className="tabular-nums">
+              {fmtUsd(remaining)} / {fmtUsd(monthly)}
+            </span>
+          </div>
+          <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-brand-800">
+            <div className="h-full rounded-full bg-brand dark:bg-skyblue" style={{ width: `${usedPct}%` }} />
+          </div>
+        </div>
+      )}
+
+      <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+        {!usage.paid_access && 'Tanpa akses berbayar. '}
+        {reset && `Reset ${reset}.`}
+      </p>
+    </Card>
+  );
+}
+
+export default function Dashboard() {  const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
   const load = () => {
@@ -145,7 +207,7 @@ export default function Dashboard() {
     return <div className="mx-auto max-w-5xl px-4 py-16 text-center text-sm text-slate-500">Memuat analitik...</div>;
   }
 
-  const { stats, by_day, by_model, by_user, queue, content, hermes_status } = data;
+  const { stats, by_day, by_model, by_user, queue, content, hermes_status, hermes_usage } = data;
   const maxTok = Math.max(1, ...by_day.map((d) => d.tokens));
 
   return (
@@ -185,6 +247,10 @@ export default function Dashboard() {
         />
         <StatCard label="Total token" value={stats.total_tokens.toLocaleString('en-US')} sub={`${stats.prompt_tokens.toLocaleString('en-US')} prompt`} />
         <StatCard label="Pengguna" value={stats.total_users} />
+      </div>
+
+      <div className="mt-4">
+        <UsageCard usage={hermes_usage} />
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">

@@ -1,0 +1,97 @@
+/* @theme notebook */
+/* Modern, colorful Marp theme (NotebookLM-ish). Layout is shared; palette is
+   overridable per-deck: backend menyisipkan <style>section{--accent:..}</style>. */
+@import 'default';
+
+section {
+  --accent: #4f46e5;
+  --accent2: #06b6d4;
+  --bg: #ffffff;
+  --ink: #0f172a;
+  width: 1280px;
+  height: 720px;
+  padding: 76px 92px;
+  font-family: "Liberation Sans", Arial, "Helvetica Neue", "Segoe UI", sans-serif;
+  font-size: 27px;
+  line-height: 1.4;
+  color: var(--ink);
+  justify-content: flex-start;
+  background:
+    linear-gradient(180deg, var(--accent), var(--accent2)) left top / 14px 100% no-repeat,
+    radial-gradient(1000px 520px at 112% -12%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 62%),
+    radial-gradient(820px 520px at -12% 116%, color-mix(in srgb, var(--accent2) 12%, transparent), transparent 58%),
+    var(--bg);
+}
+
+h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+h1 { font-size: 1.7em; line-height: 1.1; margin: 0 0 0.35em; }
+h2 {
+  font-size: 1.5em;
+  margin: 0 0 0.5em;
+  padding-bottom: 0.15em;
+  border-bottom: 5px solid var(--accent);
+  display: inline-block;
+}
+p { margin: 0.3em 0; }
+strong { color: var(--accent); }
+a { color: var(--accent2); }
+
+ul, ol { margin: 0.2em 0; }
+ul { list-style: none; padding-left: 0; }
+li { position: relative; padding-left: 1.15em; margin: 0.34em 0; }
+ul > li::before {
+  content: "";
+  position: absolute;
+  left: 0.12em;
+  top: 0.52em;
+  width: 0.46em;
+  height: 0.46em;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+}
+
+table { font-size: 0.92em; border-collapse: collapse; }
+th, td { border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); padding: 0.35em 0.6em; }
+th { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+blockquote {
+  margin: 0.4em 0;
+  padding: 0.5em 0.9em;
+  border-left: 6px solid var(--accent);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-radius: 0 10px 10px 0;
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
+}
+
+code { background: color-mix(in srgb, var(--ink) 9%, transparent); padding: 0.05em 0.3em; border-radius: 6px; font-size: 0.9em; }
+
+/* Cover slide */
+section.title {
+  justify-content: center;
+  padding: 0 110px;
+  color: #fff;
+  background:
+    radial-gradient(760px 620px at 90% 4%, color-mix(in srgb, var(--accent2) 55%, transparent), transparent 60%),
+    linear-gradient(135deg, #1e1b4b 0%, var(--accent) 58%, #0e7490 130%);
+}
+section.title h1 { color: #ffffff; font-size: 2.4em; }
+section.title h2, section.title p { color: rgba(255, 255, 255, 0.85); border: none; font-weight: 500; }
+section.title strong { color: #fde68a; }
+
+/* Section divider */
+section.section {
+  justify-content: center;
+  background:
+    radial-gradient(600px 620px at 118% 50%, color-mix(in srgb, var(--accent) 70%, transparent), transparent 62%),
+    linear-gradient(180deg, #0f172a, #111827);
+}
+section.section h1, section.section h2 { color: #ffffff; border: none; display: block; }
+section.section h2::after {
+  content: "";
+  display: block;
+  width: 90px;
+  height: 6px;
+  margin-top: 0.35em;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Media;
 use App\Models\Setting;
 use App\Models\Task;
+use App\Support\MarpGenerator;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -46,6 +47,7 @@ class RunTask implements ShouldQueue
                 'convert' => $this->runConvert($task),
                 'transcribe' => $this->runTranscribe($task),
                 'notulensi' => $this->runNotulensi($task),
+                'pptx' => $this->runPptx($task),
                 default => throw new \RuntimeException('Jenis tugas tidak dikenal: '.$task->type),
             };
         } catch (\Throwable $e) {
@@ -158,6 +160,38 @@ class RunTask implements ShouldQueue
                 'text' => (string) ($data['text'] ?? ''),
                 'language' => $data['language'] ?? null,
                 'duration' => $data['duration'] ?? null,
+            ],
+        ]);
+    }
+
+    private function runPptx(Task $task): void
+    {
+        $payload = $task->payload ?? [];
+        $markdown = (string) ($payload['markdown'] ?? '');
+        if (trim($markdown) === '') {
+            throw new \RuntimeException('Markdown presentasi kosong.');
+        }
+
+        $task->update(['progress' => 20]);
+
+        $media = MarpGenerator::generatePptx(
+            $markdown,
+            $task->user_id,
+            null,
+            (string) ($payload['filename'] ?? ''),
+            is_array($payload['theme'] ?? null) ? $payload['theme'] : [],
+        );
+
+        $task->update([
+            'status' => 'done',
+            'progress' => 100,
+            'finished_at' => now(),
+            'duration_seconds' => $task->started_at ? max(0, now()->diffInSeconds($task->started_at, false)) : null,
+            'result' => [
+                'media_id' => (string) $media->id,
+                'url' => '/api/media/'.$media->id,
+                'filename' => $media->filename,
+                'size' => (int) $media->size,
             ],
         ]);
     }

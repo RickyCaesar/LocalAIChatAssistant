@@ -4,6 +4,7 @@ const TYPE_LABEL = {
   convert: 'Konversi MP3',
   transcribe: 'Transkripsi',
   notulensi: 'Notulensi',
+  pptx: 'Presentasi',
 };
 
 export function formatEta(seconds) {

@@ -149,6 +149,39 @@ class QueueController extends Controller
         return response()->json($this->serialize($task), 202);
     }
 
+    // Buat PowerPoint (.pptx) dari Markdown Marp di antrean latar belakang.
+    public function storePptx(Request $request)
+    {
+        $hex = 'regex:/^#[0-9a-fA-F]{3,8}$/';
+        $data = $request->validate([
+            'markdown' => 'required|string|max:200000',
+            'filename' => 'nullable|string|max:120',
+            'theme' => 'nullable|array',
+            'theme.accent' => "nullable|string|$hex",
+            'theme.accent2' => "nullable|string|$hex",
+            'theme.bg' => "nullable|string|$hex",
+            'theme.ink' => "nullable|string|$hex",
+        ]);
+
+        $title = trim((string) ($data['filename'] ?? ''));
+
+        $task = Task::create([
+            'user_id' => auth()->id(),
+            'type' => 'pptx',
+            'title' => $title !== '' ? $title : 'Presentasi',
+            'status' => 'queued',
+            'payload' => [
+                'markdown' => $data['markdown'],
+                'filename' => $title,
+                'theme' => $data['theme'] ?? [],
+            ],
+        ]);
+
+        RunTask::dispatch($task->id);
+
+        return response()->json($this->serialize($task, 0), 202);
+    }
+
     public function destroy(string $id)
     {
         $task = Task::where('user_id', auth()->id())->findOrFail($id);

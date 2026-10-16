@@ -33,6 +33,9 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::post('/media/{id}/pdf', [MediaController::class, 'toPdf']);
     Route::delete('/media/{id}', [MediaController::class, 'destroy']);
 
+    Route::post('/presentations', [QueueController::class, 'storePptx']);
+    Route::post('/presentations/draft', [AIController::class, 'presentationDraft']);
+
     Route::get('/queue', [QueueController::class, 'index']);
     Route::get('/queue/{id}', [QueueController::class, 'show']);
     Route::post('/queue/transcribe', [QueueController::class, 'storeTranscribe']);

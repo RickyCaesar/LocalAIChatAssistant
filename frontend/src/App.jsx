@@ -13,6 +13,7 @@ import CalendarPage, { CalendarIcon } from './Calendar.jsx';
 import Transcribe from './Transcribe.jsx';
 import Notulensi from './Notulensi.jsx';
 import Convert from './Convert.jsx';
+import Presentasi from './Presentasi.jsx';
 import QueuePage from './Queue.jsx';
 import Skills from './Skills.jsx';
 
@@ -454,6 +455,16 @@ function ConvertIcon() {
   );
 }
 
+function SlidesIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <rect x="2" y="4" width="20" height="12" rx="2" />
+      <path d="M12 16v4" />
+      <path d="M8 20h8" />
+    </svg>
+  );
+}
+
 function QueueIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -584,6 +595,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.palette = localStorage.getItem('palette') || 'klasik';
+    document.documentElement.dataset.darkTheme = localStorage.getItem('dark-theme') || 'nila';
   }, []);
 
   useEffect(() => {
@@ -817,6 +829,12 @@ export default function App() {
               label="ConvertToAudio"
             />
             <NavButton
+              active={page === 'presentasi'}
+              onClick={() => setPage('presentasi')}
+              icon={<SlidesIcon />}
+              label="Presentasi"
+            />
+            <NavButton
               active={page === 'queue'}
               onClick={() => setPage('queue')}
               icon={<QueueIcon />}
@@ -933,11 +951,13 @@ export default function App() {
                                   ? 'Notulensi'
                                   : page === 'convert'
                                     ? 'Konversi ke MP3'
-                                    : page === 'queue'
-                                      ? 'Antrean Proses'
-                                      : page === 'skills'
-                                    ? 'Skill Hermes'
-                                    : 'Settings'}
+                                    : page === 'presentasi'
+                                      ? 'Presentasi PowerPoint'
+                                      : page === 'queue'
+                                        ? 'Antrean Proses'
+                                        : page === 'skills'
+                                      ? 'Skill Hermes'
+                                      : 'Settings'}
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Local AI chat</p>
               </div>
@@ -1120,6 +1140,8 @@ export default function App() {
               <Notulensi queue={queue} refreshQueue={refreshQueue} />
             ) : page === 'convert' ? (
               <Convert queue={queue} refreshQueue={refreshQueue} />
+            ) : page === 'presentasi' ? (
+              <Presentasi />
             ) : page === 'queue' ? (
               <QueuePage tasks={queue} onCancel={cancelTask} />
             ) : page === 'skills' ? (

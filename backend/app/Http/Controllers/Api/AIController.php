@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\ChatLog;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 class AIController extends Controller
 {
@@ -33,6 +35,55 @@ class AIController extends Controller
         } catch (\Throwable) {
             return 'offline';
         }
+    }
+
+    // Kuota/limit akun (Nous) di balik Hermes. Gateway tak punya endpoint kuota,
+    // jadi kita pakai token yang sudah ditulis Hermes di auth.json untuk satu GET
+    // ke portal. ponytail: pisah ke bridge/host helper kalau auth.json dipindah/di-rename.
+    private function hermesUsage(): array
+    {
+        $model = Setting::get('ai_model', (string) env('AI_MODEL', 'hermes-agent'));
+
+        return Cache::remember('hermes.usage', 60, function () use ($model) {
+            $file = (string) env('HERMES_AUTH_FILE', '/home/ROG/.hermes/auth.json');
+            $auth = is_readable($file) ? json_decode((string) file_get_contents($file), true) : null;
+            $entry = $auth['credential_pool']['nous'][0] ?? [];
+            $token = (string) ($entry['access_token'] ?? '');
+
+            if ($token === '') {
+                return ['available' => false, 'model' => $model, 'reason' => 'Token akun tidak ditemukan di auth.json.'];
+            }
+
+            $base = rtrim((string) ($entry['portal_base_url'] ?? 'https://portal.nousresearch.com'), '/');
+
+            try {
+                $res = Http::timeout(8)->acceptJson()->withToken($token)->get($base.'/api/oauth/account');
+            } catch (\Throwable $e) {
+                return ['available' => false, 'model' => $model, 'reason' => 'Portal tidak terjangkau.'];
+            }
+
+            if (! $res->successful()) {
+                return ['available' => false, 'model' => $model, 'reason' => 'Portal menolak (HTTP '.$res->status().').'];
+            }
+
+            $j = $res->json() ?: [];
+            $sub = $j['subscription'] ?? [];
+            $paid = $j['paid_service_access'] ?? [];
+
+            return [
+                'available' => true,
+                'model' => $model,
+                'plan' => (string) ($sub['plan'] ?? 'Free'),
+                'tier' => $sub['tier'] ?? null,
+                'credits_remaining' => (float) ($sub['credits_remaining'] ?? 0),
+                'monthly_credits' => (float) ($sub['monthly_credits'] ?? 0),
+                'purchased_credits_remaining' => (float) ($j['purchased_credits_remaining'] ?? 0),
+                'total_usable_credits' => (float) ($paid['total_usable_credits'] ?? 0),
+                'paid_access' => (bool) ($paid['paid_access'] ?? false),
+                'period_end' => $sub['current_period_end'] ?? null,
+                'checked_at' => now()->toIso8601String(),
+            ];
+        });
     }
 
     public function models()
@@ -72,6 +123,104 @@ class AIController extends Controller
             'free_only' => $free->count() > 0,
             'total_available' => $models->count(),
         ]);
+    }
+
+    // Draft Marp Markdown dari deskripsi user lewat Hermes; hasilnya dikembalikan
+    // agar user bisa mengedit dulu sebelum dibuat PPTX. ponytail: panggilan
+    // non-stream, tekanan presentasi biasanya kecil.
+    public function presentationDraft(Request $request)
+    {
+        $data = $request->validate([
+            'prompt' => 'required|string|max:4000',
+            'material' => 'nullable|string|max:60000',
+        ]);
+
+        $model = Setting::get('ai_model') ?: (string) env('AI_MODEL', 'hermes-agent');
+        $system = 'You design modern, visually rich slide decks as Marp Markdown. '
+            .'Do NOT use tools and do NOT save files — reply with the Markdown text as your entire message, no explanations, no code fences. '
+            ."Begin with YAML frontmatter:\n---\nmarp: true\ntheme: notebook\npaginate: true\n---\n"
+            .'Separate every slide from the next with a line containing exactly three dashes (`---`). '
+            .'Formatting: first slide gets a `<!-- _class: title -->` line then a `# Title` and one subtitle line; use '
+            .'`<!-- _class: section -->` with a `## Heading` for part dividers in longer decks; every other slide has a `## heading` '
+            .'and 3-6 short bullets (max ~8 words each, no walls of text). Use tables, `**bold**`, and one `<blockquote>` only when they '
+            .'add clarity. Write in the same language as the user; use a few relevant emojis. For a distinctive look you MAY start the '
+            .'deck with `<style>:root{--accent:#4f46e5;--accent2:#06b6d4}</style>` (tasteful hex pair). '
+            .'If reference material is provided, base the content strictly on it and do not invent facts.';
+
+        $userContent = $data['prompt'];
+        if (! empty($data['material'])) {
+            $userContent .= "\n\n--- REFERENCE MATERIAL ---\n".Str::limit($data['material'], 20000, "\n…");
+        }
+
+        try {
+            $http = Http::timeout((int) Setting::get('ai_timeout', env('AI_TIMEOUT', 600)))->acceptJson()->asJson();
+            if ($key = (string) env('AI_API_KEY')) {
+                $http = $http->withToken($key);
+            }
+            $res = $http->post(static::baseUrl().'/chat/completions', [
+                'model' => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $system],
+                    ['role' => 'user', 'content' => $userContent],
+                ],
+                'temperature' => 0.6,
+                'stream' => false,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Tidak bisa menghubungi Hermes.', 'detail' => $e->getMessage()], 503);
+        }
+
+        if ($res->failed()) {
+            return response()->json([
+                'error' => 'Hermes mengembalikan error.',
+                'detail' => $res->json('error.message') ?? $res->body(),
+            ], 502);
+        }
+
+        $md = self::markdownFromReply((string) ($res->json('choices.0.message.content') ?? ''));
+        if ($md === null || trim($md) === '') {
+            return response()->json(['error' => 'Hermes tidak mengembalikan Markdown. Coba lagi.'], 502);
+        }
+
+        return response()->json(['markdown' => $md]);
+    }
+
+    // Hermes (agent mode) kadang menulis .md ke /home/ROG lalu membalas narasi.
+    // Utamakan isi filenya, lalu blok kode, lalu teks mentah kalau memang Markdown.
+    private static function markdownFromReply(string $text): ?string
+    {
+        if (preg_match_all('#/home/ROG/[^\s`"\'),;]+\.md#i', $text, $m)) {
+            foreach (array_reverse($m[0]) as $path) {
+                if (is_file($path)) {
+                    $body = trim((string) file_get_contents($path));
+                    if ($body !== '') {
+                        return self::stripFences($body);
+                    }
+                }
+            }
+        }
+
+        if (preg_match('/```[a-z]*\s*\n(.*?)\n```/is', $text, $m) && str_contains($m[1], 'marp:')) {
+            return trim($m[1]);
+        }
+
+        $clean = self::stripFences($text);
+        $head = ltrim($clean);
+        if (str_contains($clean, 'marp:') || str_starts_with($head, '#') || str_starts_with($head, '---')) {
+            return $clean;
+        }
+
+        return null;
+    }
+
+    private static function stripFences(string $text): string
+    {
+        $text = trim($text);
+        if (preg_match('/^```[a-z]*\s*\n(.*?)\n```\s*$/is', $text, $m)) {
+            return trim($m[1]);
+        }
+
+        return $text;
     }
 
     public function analytics()
@@ -140,6 +289,7 @@ class AIController extends Controller
             'queue' => $this->queueStats(),
             'content' => $this->contentStats(),
             'hermes_status' => $this->hermesStatus(),
+            'hermes_usage' => $this->hermesUsage(),
         ]);
     }
 

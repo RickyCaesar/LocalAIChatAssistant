@@ -7,6 +7,12 @@ const PALETTES = [
   { key: 'mint', label: 'Mint', colors: ['#1E8A7E', '#90D9C9', '#EEFBF3', '#FF9E8B'] },
 ];
 
+const DARK_THEMES = [
+  { key: 'nila', label: 'Nila', colors: ['#0F162B', '#1F2B4D', '#425B9A', '#76C0EC'] },
+  { key: 'ungu', label: 'Ungu', colors: ['#1A1128', '#32224A', '#6E4F9F', '#AFC6EF'] },
+  { key: 'hijau', label: 'Hijau', colors: ['#07201C', '#0E3A34', '#1E8A7E', '#90D9C9'] },
+];
+
 export default function Settings() {
   const [models, setModels] = useState([]);
   const [current, setCurrent] = useState('');
@@ -24,6 +30,7 @@ export default function Settings() {
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [generalMsg, setGeneralMsg] = useState(null);
   const [palette, setPalette] = useState(() => localStorage.getItem('palette') || 'klasik');
+  const [darkTheme, setDarkTheme] = useState(() => localStorage.getItem('dark-theme') || 'nila');
 
   useEffect(() => {
     (async () => {
@@ -75,6 +82,12 @@ export default function Settings() {
     setPalette(key);
     localStorage.setItem('palette', key);
     document.documentElement.dataset.palette = key;
+  };
+
+  const pickDarkTheme = (key) => {
+    setDarkTheme(key);
+    localStorage.setItem('dark-theme', key);
+    document.documentElement.dataset.darkTheme = key;
   };
 
   const save = async () => {
@@ -201,6 +214,34 @@ export default function Settings() {
               onClick={() => pickPalette(p.key)}
               className={`rounded-xl border p-3 text-left transition ${
                 palette === p.key
+                  ? 'border-brand ring-2 ring-brand/40 dark:border-skyblue dark:ring-skyblue/40'
+                  : 'border-slate-200 hover:border-brand/50 dark:border-slate-700'
+              }`}
+            >
+              <span className="text-sm font-medium">{p.label}</span>
+              <span className="mt-2 flex gap-1">
+                {p.colors.map((c) => (
+                  <span key={c} className="h-5 w-5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: c }} />
+                ))}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
+        <h3 className="text-sm font-semibold">Tema gelap</h3>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          Warna UI saat mode gelap aktif. Terpisah dari tema di atas (yang berlaku di mode terang).
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {DARK_THEMES.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => pickDarkTheme(p.key)}
+              className={`rounded-xl border p-3 text-left transition ${
+                darkTheme === p.key
                   ? 'border-brand ring-2 ring-brand/40 dark:border-skyblue dark:ring-skyblue/40'
                   : 'border-slate-200 hover:border-brand/50 dark:border-slate-700'
               }`}
