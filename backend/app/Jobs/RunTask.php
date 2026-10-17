@@ -6,6 +6,7 @@ use App\Models\Media;
 use App\Models\Setting;
 use App\Models\Task;
 use App\Support\MarpGenerator;
+use App\Support\NotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -53,16 +54,26 @@ class RunTask implements ShouldQueue
         } catch (\Throwable $e) {
             $task->update(['status' => 'error', 'error' => $e->getMessage(), 'finished_at' => now()]);
         }
+
+        // Satu panggilan untuk sukses & gagal; status task sudah final di sini.
+        NotificationService::taskFinished($task);
     }
 
     public function failed(\Throwable $e): void
     {
-        Task::whereKey($this->taskId)->update([
+        $task = Task::find($this->taskId);
+        if (! $task) {
+            return;
+        }
+
+        $task->update([
             'status' => 'error',
             'error' => $e->getMessage(),
             'finished_at' => now(),
             'duration_seconds' => $this->getTaskDuration($this->taskId),
         ]);
+
+        NotificationService::taskFinished($task);
     }
 
     private function getTaskDuration(int $id): ?int

@@ -18,16 +18,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         nodejs \
         npm \
         chromium \
+        curl \
     && docker-php-ext-install mbstring zip bcmath pdo_mysql pcntl \
     && npm install -g @marp-team/marp-cli@4.5.1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Local speech-to-text (faster-whisper, CPU). Isolated venv so it can't
-# clash with system packages.
+# Local speech-to-text (faster-whisper, CPU) + text-to-speech (Piper, CPU).
+# Isolated venv so it can't clash with system packages.
 RUN python3 -m venv /opt/stt \
     && /opt/stt/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/stt/bin/pip install --no-cache-dir faster-whisper "av>=14,<17"
+    && /opt/stt/bin/pip install --no-cache-dir faster-whisper "av>=14,<17" piper-tts
+
+# Default TTS voice (Indonesian, ~63MB) is baked in so voice mode works out of
+# the box. Extra voices: drop .onnx + .onnx.json into backend/storage/app/tts_models.
+RUN mkdir -p /opt/tts/voices \
+    && for f in id_ID-news_tts-medium.onnx id_ID-news_tts-medium.onnx.json; do \
+         curl -fsSL -o "/opt/tts/voices/$f" \
+           "https://huggingface.co/rhasspy/piper-voices/resolve/main/id/id_ID/news_tts/medium/$f"; \
+       done
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -53,7 +62,8 @@ RUN printf 'upload_max_filesize=0\npost_max_size=0\nmemory_limit=512M\nmax_execu
 # STT runtime: interpreter, model cache inside the writable storage volume.
 ENV STT_PYTHON=/opt/stt/bin/python \
     HF_HOME=/app/storage/app/stt-models \
-    HF_HUB_DISABLE_TELEMETRY=1
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    TTS_PIPER=/opt/stt/bin/piper
 
 EXPOSE 8000
 

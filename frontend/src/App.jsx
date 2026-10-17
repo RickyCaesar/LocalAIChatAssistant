@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api, API_URL, clearToken, apiUpload, mediaUrl, mediaSrc, streamChat, apiQueue, apiQueueCancel } from './api.js';
+import { api, API_URL, clearToken, apiUpload, mediaUrl, mediaSrc, streamChat, apiQueue, apiQueueCancel, apiNotifications, apiNotificationRead, apiNotificationsReadAll, apiStt } from './api.js';
+import { speak, stopSpeech, startRecording } from './speech.js';
 import { getMediaById, refreshMedia } from './mediaStore.js';
 import AuthScreen from './AuthScreen.jsx';
 import Dashboard from './Dashboard.jsx';
@@ -16,6 +17,7 @@ import Convert from './Convert.jsx';
 import Presentasi from './Presentasi.jsx';
 import QueuePage from './Queue.jsx';
 import Skills from './Skills.jsx';
+import { NotificationBell, ToastContainer, browserNotify, chime } from './Notifications.jsx';
 
 const mediaSrcFor = mediaSrc;
 
@@ -192,7 +194,7 @@ function PendingBadge({ item, onRemove }) {
   );
 }
 
-function MessageBubble({ message }) {
+function MessageBubble({ message, speaking, onSpeak }) {
   const isUser = message.role === 'user';
 
   if (isUser) {
@@ -251,8 +253,36 @@ function MessageBubble({ message }) {
             {message.content}
           </ReactMarkdown>
         </div>
+        {!message.error && onSpeak && String(message.content).trim() && (
+          <button
+            type="button"
+            onClick={onSpeak}
+            aria-label={speaking ? 'Hentikan suara' : 'Bacakan pesan'}
+            title={speaking ? 'Hentikan suara' : 'Bacakan pesan'}
+            className={`mt-1.5 flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium transition hover:bg-cream dark:hover:bg-brand-800 ${
+              speaking ? 'text-brand dark:text-skyblue' : 'text-slate-400 dark:text-slate-500'
+            }`}
+          >
+            {speaking ? <StopSoundIcon /> : <SpeakerIcon />}
+            {speaking ? 'Hentikan' : 'Bacakan'}
+          </button>
+        )}
       </div>
     </div>
+  );
+}
+
+function SpeakingBars() {
+  return (
+    <span className="flex h-4 items-end gap-0.5" aria-hidden="true">
+      {[10, 16, 7, 13].map((h, i) => (
+        <span
+          key={i}
+          className="w-1 animate-pulse rounded-full bg-brand dark:bg-skyblue"
+          style={{ height: `${h}px`, animationDelay: `${i * 120}ms` }}
+        />
+      ))}
+    </span>
   );
 }
 
@@ -424,6 +454,37 @@ function ImageSquareIcon() {
   );
 }
 
+function SpeakerIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+      <path d="M11 5 6 9H2v6h4l5 4V5z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+    </svg>
+  );
+}
+
+function StopSoundIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </svg>
+  );
+}
+
+function WaveIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5">
+      <path d="M2 12h2" />
+      <path d="M6 8v8" />
+      <path d="M10 5v14" />
+      <path d="M14 8v8" />
+      <path d="M18 10v4" />
+      <path d="M22 12h0" />
+    </svg>
+  );
+}
+
 function MicIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -495,6 +556,11 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [page, setPage] = useState('chat');
   const [queue, setQueue] = useState([]);
+  const [notifs, setNotifs] = useState([]);
+  const [unread, setUnread] = useState(0);
+  const [toasts, setToasts] = useState([]);
+  const notifLastIdRef = useRef(0);
+  const notifPrimedRef = useRef(false);
   const [input, setInput] = useState('');
   const [pendingImages, setPendingImages] = useState([]);
   const [uploadError, setUploadError] = useState(null);
@@ -507,11 +573,27 @@ export default function App() {
     if (saved) return saved === 'dark';
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
+  const [tts, setTts] = useState({ enabled: true, voice: '', speed: 1 });
+  const [speaking, setSpeaking] = useState(null); // index pesan | -1 saat auto-play
+  const [voiceMode, setVoiceMode] = useState(() => localStorage.getItem('voice-mode') === '1');
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
 
   const sessionsRef = useRef(sessions);
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
+  const ttsRef = useRef(tts);
+  const voiceModeRef = useRef(voiceMode);
+  const recRef = useRef(null);
+  const recTimerRef = useRef(null);
+  useEffect(() => {
+    ttsRef.current = tts;
+  }, [tts]);
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+    localStorage.setItem('voice-mode', voiceMode ? '1' : '0');
+  }, [voiceMode]);
 
   const active = sessions.find((s) => s.id === activeId) ?? null;
   const messages = active ? active.messages : [];
@@ -555,15 +637,72 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Notifikasi memakai polling yang sama dengan antrean (bukan SSE): backend
+  // dijalankan `php artisan serve` single-thread, stream panjang akan
+  // memblokir seluruh API. ponytail: tab background di-throttle browser
+  // (poll bisa jadi ~1 menit); upgrade ke Service Worker + Push API kalau
+  // notifikasi instan saat tab tidak aktif itu penting.
+  const closeToast = (key) => setToasts((prev) => prev.filter((t) => t.key !== key));
+
+  const refreshNotifs = useCallback(() => {
+    apiNotifications(notifLastIdRef.current)
+      .then((data) => {
+        const items = data.items || [];
+        if (data.latest) notifLastIdRef.current = data.latest;
+        if (items.length > 0) {
+          setNotifs((prev) => [...items, ...prev].slice(0, 50));
+          // Jangan munculkan toast/push untuk tumpukan lama saat pertama buka.
+          if (notifPrimedRef.current) {
+            items.forEach((n) => {
+              const key = `${n.id}-${Date.now()}`;
+              setToasts((prev) => [...prev, { ...n, key }].slice(-4));
+              setTimeout(() => setToasts((prev) => prev.filter((t) => t.key !== key)), 6000);
+              if (document.hidden) browserNotify(n);
+            });
+            chime();
+          }
+        }
+        setUnread(data.unread || 0);
+        notifPrimedRef.current = true;
+      })
+      .catch(() => {});
+  }, []);
+
+  const markNotificationRead = (n) => {
+    if (n.is_read) return;
+    setNotifs((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
+    setUnread((c) => Math.max(0, c - 1));
+    apiNotificationRead(n.id).catch(() => {});
+  };
+
+  const markAllNotificationsRead = () => {
+    setNotifs((prev) => prev.map((x) => ({ ...x, is_read: true })));
+    setUnread(0);
+    apiNotificationsReadAll().catch(() => {});
+  };
+
+  const openNotification = (n) => {
+    markNotificationRead(n);
+    if (n.link) setPage(n.link);
+  };
+
   useEffect(() => {
     if (!auth) {
       setQueue([]);
+      setNotifs([]);
+      setUnread(0);
+      notifLastIdRef.current = 0;
+      notifPrimedRef.current = false;
       return;
     }
     refreshQueue();
-    const timer = setInterval(refreshQueue, 3000);
+    refreshNotifs();
+    const timer = setInterval(() => {
+      refreshQueue();
+      refreshNotifs();
+    }, 3000);
     return () => clearInterval(timer);
-  }, [auth, refreshQueue]);
+  }, [auth, refreshQueue, refreshNotifs]);
 
   const activeCount = queue.filter((t) => t.status === 'queued' || t.status === 'processing').length;
   const runningTask = queue.find((t) => t.status === 'processing');
@@ -587,6 +726,26 @@ export default function App() {
       .then((data) => setIsAdmin(Boolean(data.user && data.user.is_admin)))
       .catch(() => {});
   }, [auth]);
+
+  // Preferensi TTS (bisa diubah dari halaman Settings).
+  const loadTtsSettings = useCallback(() => {
+    api('/api/settings')
+      .then((s) =>
+        setTts({
+          enabled: Boolean(Number(s.tts_enabled ?? 1)),
+          voice: s.tts_voice || '',
+          speed: Number(s.tts_speed) || 1,
+        })
+      )
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!auth) return;
+    loadTtsSettings();
+    window.addEventListener('hermes-settings-changed', loadTtsSettings);
+    return () => window.removeEventListener('hermes-settings-changed', loadTtsSettings);
+  }, [auth, loadTtsSettings]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -677,14 +836,21 @@ export default function App() {
     } catch {
       /* token may already be gone; ignore */
     }
+    // Matikan mic/pemutar sebelum sesi berakhir (privasi).
+    voiceModeRef.current = false;
+    setVoiceMode(false);
+    stopVoiceRecording();
+    stopSpeech();
+    setSpeaking(null);
     clearToken();
     setAuth(false);
     setSessions([]);
     setActiveId(null);
   };
 
-  const sendMessage = async () => {
-    const text = input.trim();
+  // `forcedText` dipakai voice mode (hasil transkripsi) selain input teks.
+  const sendMessage = async (forcedText) => {
+    const text = (typeof forcedText === 'string' ? forcedText : input).trim();
     const imageIds = pendingImages.map((p) => p.id);
     if ((!text && imageIds.length === 0) || loading || !active) return;
 
@@ -716,6 +882,17 @@ export default function App() {
       setStreamText('');
       appendToActive((prev) => [...prev, { role: 'assistant', content: reply }]);
       refreshMedia();
+
+      // Mode suara: bacakan otomatis, lalu siap merekam lagi (hands-free).
+      if (voiceModeRef.current && ttsRef.current.enabled && reply.trim()) {
+        setSpeaking(-1);
+        const done = await speak(reply, ttsRef.current).catch((e) => {
+          setUploadError(e.message);
+          return false;
+        });
+        setSpeaking(null);
+        if (done && voiceModeRef.current) setTimeout(() => startVoice(), 400);
+      }
     } catch (err) {
       setStreamText('');
       appendToActive((prev) => [
@@ -760,6 +937,90 @@ export default function App() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+  };
+
+  // Bacakan satu balasan. Klik lagi saat sedang berbunyi = berhenti.
+  const speakAt = async (index, text) => {
+    if (speaking === index) {
+      stopSpeech();
+      setSpeaking(null);
+      return;
+    }
+    setSpeaking(index);
+    const done = await speak(text, ttsRef.current).catch((e) => {
+      setUploadError(e.message);
+      return false;
+    });
+    setSpeaking((cur) => (cur === index ? null : cur));
+    if (done && voiceModeRef.current) setTimeout(() => startVoice(), 400);
+  };
+
+  // Voice mode: rekam → transkrip (sinkron) → kirim → TTS → siap rekam lagi.
+  // ponytail: tanpa VAD, rekaman berhenti otomatis setelah 20 dtk (atau klik).
+  // Upgrade: deteksi keheningan via AnalyserNode supaya tak perlu batas waktu.
+  const stopVoiceRecording = async () => {
+    const rec = recRef.current;
+    if (!rec) return;
+    recRef.current = null;
+    clearTimeout(recTimerRef.current);
+    setRecording(false);
+    const blob = await rec.stop();
+
+    if (blob.size < 3000) {
+      // Terlalu pendek / hening — coba lagi tanpa mengirim apa pun.
+      if (voiceModeRef.current) setTimeout(() => startVoice(), 800);
+      return;
+    }
+
+    setTranscribing(true);
+    try {
+      const { text } = await apiStt(blob);
+      setTranscribing(false);
+      if (!String(text || '').trim()) {
+        if (voiceModeRef.current) setTimeout(() => startVoice(), 800);
+        return;
+      }
+      await sendMessage(text);
+    } catch (e) {
+      setTranscribing(false);
+      setUploadError(e.message);
+    }
+  };
+
+  const startVoice = async () => {
+    if (recRef.current) {
+      stopVoiceRecording(); // klik saat merekam = berhenti & kirim
+      return;
+    }
+    if (loading || speaking !== null || transcribing || !active) return;
+    try {
+      const rec = await startRecording();
+      // Mode dibatalkan selagi izin mic diproses.
+      if (!voiceModeRef.current) {
+        rec.stop();
+        return;
+      }
+      recRef.current = rec;
+      setRecording(true);
+      recTimerRef.current = setTimeout(() => stopVoiceRecording(), 20000);
+    } catch (e) {
+      setUploadError(`Mikrofon tidak bisa diakses: ${e.message}`);
+      voiceModeRef.current = false;
+      setVoiceMode(false);
+    }
+  };
+
+  const toggleVoiceMode = () => {
+    if (voiceMode) {
+      voiceModeRef.current = false;
+      setVoiceMode(false);
+      stopVoiceRecording();
+      stopSpeech();
+      setSpeaking(null);
+    } else {
+      voiceModeRef.current = true;
+      setVoiceMode(true);
     }
   };
 
@@ -963,6 +1224,13 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <NotificationBell
+                items={notifs}
+                unread={unread}
+                onRead={markNotificationRead}
+                onReadAll={markAllNotificationsRead}
+                onOpen={openNotification}
+              />
               {activeCount > 0 && (
                 <button
                   type="button"
@@ -1009,7 +1277,12 @@ export default function App() {
                   </div>
                 )}
                 {messages.map((message, i) => (
-                  <MessageBubble key={i} message={message} />
+                  <MessageBubble
+                    key={i}
+                    message={message}
+                    speaking={speaking === i}
+                    onSpeak={message.role === 'assistant' && !message.error ? () => speakAt(i, message.content) : null}
+                  />
                 ))}
                 {streamText && <StreamBubble text={streamText} />}
                 {loading && !streamText && (
@@ -1074,6 +1347,30 @@ export default function App() {
                   ))}
                 </div>
               )}
+              {voiceMode && (
+                <div className="mx-auto mb-2 flex max-w-3xl items-center justify-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {speaking !== null ? (
+                    <>
+                      <SpeakingBars />
+                      <span>AI sedang berbicara…</span>
+                    </>
+                  ) : recording ? (
+                    <>
+                      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+                      <span>Mendengarkan… klik mikrofon untuk berhenti & kirim</span>
+                    </>
+                  ) : transcribing ? (
+                    <>
+                      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-amber-500" />
+                      <span>Mengubah suara menjadi teks…</span>
+                    </>
+                  ) : loading ? (
+                    <span>Hermes sedang menjawab…</span>
+                  ) : (
+                    <span>Mode suara aktif — klik mikrofon lalu bicara</span>
+                  )}
+                </div>
+              )}
               <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus-within:border-skyblue">
                 <input
                   ref={fileInputRef}
@@ -1104,6 +1401,33 @@ export default function App() {
                   placeholder="Send a message to Hermes..."
                   className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-[0.95rem] outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
+                <button
+                  type="button"
+                  onClick={startVoice}
+                  disabled={!voiceMode || loading || transcribing || speaking !== null}
+                  aria-label={recording ? 'Berhenti merekam' : 'Mulai merekam'}
+                  title={recording ? 'Berhenti merekam & kirim' : 'Mulai merekam'}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                    recording
+                      ? 'animate-pulse bg-red-500 text-white hover:bg-red-600'
+                      : 'text-slate-500 hover:bg-cream dark:text-slate-400 dark:hover:bg-brand-600'
+                  }`}
+                >
+                  <MicIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleVoiceMode}
+                  aria-label="Mode suara"
+                  title="Mode suara (rekam & dengarkan balasan)"
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition ${
+                    voiceMode
+                      ? 'bg-brand text-white hover:bg-brand-600 dark:bg-skyblue dark:text-slate-900 dark:hover:bg-skyblue/85'
+                      : 'text-slate-500 hover:bg-cream dark:text-slate-400 dark:hover:bg-brand-600'
+                  }`}
+                >
+                  <WaveIcon />
+                </button>
                 <button
                   type="button"
                   onClick={sendMessage}
@@ -1152,6 +1476,8 @@ export default function App() {
           </main>
         )}
       </div>
+
+      <ToastContainer toasts={toasts} onClose={closeToast} onOpen={openNotification} />
     </div>
   );
 }

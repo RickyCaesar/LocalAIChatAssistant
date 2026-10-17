@@ -11,13 +11,15 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Konversi video ke MP3** (menu **ConvertToAudio**): video (MP4/MKV/MOV/…) atau berkas audio lain → MP3. Memakai PyAV (venv STT yang sudah ada), jadi tak perlu `ffmpeg` sistem. Diproses **asinkron di antrean**.
 - **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pencarian**, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
 - **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper`; unggah via tombol atau **drag & drop**. Diproses **asinkron di antrean** (container `queue-worker`).
+- **Suara AI (Text-to-Speech)** lokal memakai **Piper** (CPU): tombol **Bacakan** di tiap balasan AI, plus **Mode Suara** dua arah (bicara → transkripsi → jawaban dibacakan otomatis → mikrofon siap lagi) — lihat *Mode Suara*.
 - **Antrean proses (menu Antrean)**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, dan posisi dalam antrean. Indikator ringkas tampil di header dari menu mana pun, dan progres tetap berjalan saat berpindah menu.
+- **Notifikasi**: lonceng di header dengan lencana belum dibaca, toast di kanan atas saat tugas antrean selesai/gagal, dan **notifikasi browser (OS)** opsional saat tab tidak aktif. Tersimpan per akun dan bisa ditandai dibaca.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — mis. tabel penugasan reviewer atau daftar tata tertib acara — lalu mengirimnya ke chat/Gallery.
 - **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
 - **Todo List**: prioritas (tinggi/sedang/rendah), catatan, edit inline, due date + jam, filter Semua/Aktif/Selesai.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang (mingguan/bulanan/tahunan), edit/hapus. Bisa juga dikendalikan dari chat.
-- **Pengaturan**: model AI, timeout, batas ukuran unggah, model & bahasa transkripsi, **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau).
+- **Pengaturan**: model AI, timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau).
 - **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent.
 - **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik — termasuk **kartu kuota/kredit Hermes**, Kelola Pengguna, Skill, Settings).
 
@@ -27,6 +29,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Backend:** PHP + Laravel (HTTP Client, SQLite)
 - **Antrean:** Laravel Queue dengan driver `database`, dijalankan oleh container `queue-worker` (`php artisan queue:work`). Job `App\Jobs\RunTask` menangani convert/transcribe/notulensi; progres disimpan di tabel `tasks`.
 - **STT & audio:** faster-whisper (CPU, `int8`) untuk transkripsi; PyAV untuk ekstraksi audio → MP3. Keduanya memancarkan progres ke job.
+- **TTS:** Piper (CPU, `piper-tts` di venv `/opt/stt`). Model suara id_ID (~63 MB) sudah di-bake ke image di `/opt/tts/voices`; TTS untuk voice mode dipanggil **sinkron** (`POST /api/tts`), hasil WAV di-cache di `storage/app/private/tts`.
 - **Spreadsheet:** penulis XLSX minimal di `app/Support/DocumentBuilder.php` (memakai ekstensi `zip`, tanpa dependensi tambahan)
 - **Konversi PDF:** LibreOffice headless di dalam container backend
 - **Presentasi PPTX:** `@marp-team/marp-cli` + Chromium (sudah ada di image backend) untuk merender Marp Markdown → `.pptx`
@@ -86,10 +89,12 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 | `CORS_ALLOWED_ORIGINS` | `*` | origin yang diizinkan |
 | `QUEUE_CONNECTION` | `database` | driver antrean; proses berat dijalankan oleh `queue-worker` |
 | `DB_QUEUE_RETRY_AFTER` | `3660` | kapan job boleh di-retry; **harus > `--timeout` worker** (3600) |
+| `TTS_ENGINE` | `piper` | mesin TTS lokal (saat ini hanya `piper`) |
+| `TTS_MODEL_PATH` | `/app/storage/app/tts_models` | folder model suara tambahan (opsional; model bawaan ada di `/opt/tts/voices` dalam image) |
 
 ### Pengaturan dalam aplikasi (menu **Settings**, admin)
 
-Tersimpan di DB (model `Setting`): `ai_model`, `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`. Pilihan **tema** (terang & gelap) disimpan di `localStorage` browser, bukan di server.
+Tersimpan di DB (model `Setting`): `ai_model`, `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`, `tts_enabled`, `tts_voice`, `tts_speed`. Pilihan **tema** (terang & gelap) dan sakelar **Mode Suara** disimpan di `localStorage` browser, bukan di server.
 
 ## Integrasi dengan Hermes Agent
 
@@ -127,6 +132,26 @@ Skema JSON `DOC_BUILD` (dijelaskan ke model lewat `ActionRunner::toolsInstructio
 
 Tiap blok boleh punya `heading`, `columns` (baris header tebal), dan `rows`; `columns`/`rows` juga boleh di level atas (dianggap satu blok). Berkas disimpan ke penyimpanan media dan otomatis muncul di **Gallery**.
 
+## Notifikasi
+
+Notifikasi dibuat otomatis saat tugas antrean selesai atau gagal (transkripsi, konversi MP3, notulensi, presentasi).
+
+- **Lonceng** di header: riwayat + jumlah belum dibaca. Klik item untuk menandai dibaca dan pindah ke halaman terkait (Gallery/Antrean).
+- **Toast** muncul di kanan atas setiap ada notifikasi baru.
+- **Notifikasi browser (OS)**: buka lonceng → **Aktifkan notifikasi browser** → izinkan di dialog browser. Notifikasi OS hanya muncul saat tab sedang tidak aktif.
+- Frontend mempoll `GET /api/notifications` tiap 3 detik (bersamaan dengan poll antrean), bukan SSE — lihat *Batasan Diketahui*.
+
+## Mode Suara (TTS & STT)
+
+- **Bacakan**: tiap balasan AI punya tombol **Bacakan** untuk memutar suara (Piper). Klik lagi untuk berhenti; hanya satu audio diputar pada satu waktu.
+- **Mode Suara** (tombol gelombang di samping kotak chat): alur hands-free dua arah —
+  1. Klik **mikrofon** lalu bicara (klik lagi untuk berhenti & kirim). Rekaman otomatis berhenti setelah **20 detik**.
+  2. Audio ditranskripsi **sinkron** lewat `POST /api/stt` (faster-whisper) dan langsung dikirim sebagai pesan.
+  3. Balasan AI otomatis dibacakan (`tts_enabled`), lalu mikrofon siap merekam lagi.
+  Transkrip kosong/terlalu pendek tidak dikirim — perekaman dimulai ulang otomatis.
+- **Model suara default**: `id_ID-news_tts-medium` (Indonesia, di-bake ke image). Menambah suara: taruh pasangan `<nama>.onnx` + `<nama>.onnx.json` (unduh dari [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices)) ke `backend/storage/app/tts_models/`, lalu restart backend — suara langsung muncul di Settings.
+- **Latensi**: TTS praktis instan (CPU, kalimat pendek); STT memakai model yang dipilih di Settings. Untuk percakapan, pakai `small`/`base` — `large-v3` bisa > 1 menit per ucapan. Lihat *Batasan Diketahui*.
+
 ## Akun & Peran
 
 - Registrasi & login terbuka melalui `/api/register` dan `/api/login`.
@@ -138,14 +163,15 @@ Tiap blok boleh punya `heading`, `columns` (baris header tebal), dan `rows`; `co
 ```
 backend/            Laravel API
   .env.example                contoh konfigurasi (salin ke .env)
-  app/Http/Controllers/Api/   Auth, Chat, Media, Queue, Todo, Event, User, Skill, AI
+  app/Http/Controllers/Api/   Auth, Chat, Media, Queue, Todo, Event, User, Skill, AI, Notification
   app/Jobs/RunTask.php        job antrean generik (convert / transcribe / notulensi / pptx)
   app/Models/Task.php         status, progress & hasil tiap tugas antrean
   app/Support/Eta.php         rumus estimasi selesai (elapsed/progress)
   app/Providers/AppServiceProvider.php  pragma SQLite (busy_timeout, journal mode)
   app/Support/                FilePreview (ekstraksi teks/OCR), ActionRunner (aksi dari chat),
                               DocumentBuilder (penulis XLSX minimal untuk DOC_BUILD),
-                              MarpGenerator (Marp Markdown → PPTX via marp-cli + Chromium)
+                              MarpGenerator (Marp Markdown → PPTX via marp-cli + Chromium),
+                              NotificationService (notifikasi in-app dari task antrean)
   resources/marp/notebook.css tema Marp (variabel warna di-inject dari pilihan tema)
   stt/transcribe.py           skrip faster-whisper (memancarkan progres)
   stt/toaudio.py              ekstrak audio → MP3 via PyAV (memancarkan progres)
@@ -154,7 +180,7 @@ backend/            Laravel API
   routes/api.php              definisi endpoint
 frontend/           React + Vite + Tailwind
   src/App.jsx                 shell, navigasi sidebar, chat, polling antrean global
-  src/*.jsx                   Gallery, Todo, Calendar, Transcribe, Convert, Presentasi, Notulensi, Queue, Skills, Settings, Users, Dashboard
+  src/*.jsx                   Gallery, Todo, Calendar, Transcribe, Convert, Presentasi, Notulensi, Queue, Skills, Settings, Users, Dashboard, Notifications (lonceng + toast)
   src/holidays.js             helper hari libur Indonesia (date-holidays)
   src/theme.css               override utilitas Tailwind agar memakai variabel tema (diimpor setelah index.css)
 tools/topdf.sh      konversi dokumen → PDF via container (dipakai agent dari chat)
@@ -171,6 +197,8 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - **Media:** `GET|POST /api/media`, `GET|DELETE /api/media/{id}` (pratinjau inline; `?download=1` untuk unduh), `POST /api/media/{id}/pdf` (konversi berkas ke PDF)
 - **Antrean (asinkron):** `GET /api/queue` (daftar tugas + progress/ETA/posisi), `GET /api/queue/{id}`, `DELETE /api/queue/{id}` (batalkan yang masih menunggu), `POST /api/queue/transcribe` (unggah audio), `POST /api/queue/convert` (unggah video → MP3), `POST /api/queue/notulensi` (`{source}`)
 - **Presentasi:** `POST /api/presentations` (Marp Markdown → PPTX, **asinkron**), `POST /api/presentations/draft` (AI menyusun draft Marp Markdown)
+- **Notifikasi:** `GET /api/notifications` (`?after=<id>` untuk yang lebih baru; sekaligus mengembalikan `unread`), `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all`
+- **Suara (TTS/STT):** `GET /api/tts/voices` (daftar model suara), `POST /api/tts` (`{text, voice?, speed?}` → `audio/wav`), `POST /api/stt` (unggah audio → `{text, language}`, sinkron untuk Mode Suara)
 - **Todo:** `GET|POST /api/todos`, `PUT|DELETE /api/todos/{id}`
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
 - **Settings:** `GET /api/settings`, `POST /api/settings`, `POST /api/settings/model`
@@ -194,3 +222,8 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - Acara berulang di-expand di sisi klien (maks 400 kejadian per event); edit/hapus berlaku untuk **seluruh seri**, bukan satu kejadian.
 - Pencarian & filter Gallery berjalan di sisi klien (memuat seluruh daftar media).
 - Token media dikirim lewat query `?auth=` (keterbatasan `<img>`/`<iframe>`), sehingga bisa muncul di log akses.
+- Notifikasi diambil lewat **polling 3 detik** (bersamaan dengan poll antrean), bukan SSE/WebSocket: backend berjalan `php artisan serve` yang single-thread, sehingga stream panjang akan memblokir seluruh API. Di tab yang tidak aktif, browser men-throttle timer (bisa jadi ~1 menit), jadi notifikasi OS bisa tertunda; upgrade ke Service Worker + Push API untuk notifikasi instan.
+- Notifikasi tidak dibuat untuk aksi `ACTION:` (TODO/DOC_BUILD/GENERATE_PPTX) karena semuanya dieksekusi sinkron di dalam request chat — hasilnya sudah tampil di balasan.
+- `POST /api/stt` (Mode Suara) sengaja **sinkron** karena jeda antrean (worker poll 3 dtk) terlalu lama untuk percakapan. Konsekuensinya, selama transkripsi berjalan server `php artisan serve` yang single-thread tidak melayani request lain. Dengan model `small` + `int8` klip pendek ≈ 5–10 dtk (panggilan pertama memuat model); dengan `large-v3` bisa > 1 menit — set `small`/`base` di Settings untuk voice mode.
+- Mode suara belum memakai VAD (deteksi keheningan): rekaman berhenti lewat klik atau batas 20 detik. Upgrade: `AnalyserNode` untuk memutus otomatis saat hening.
+- TTS memakai Piper (CPU) dengan panjang teks maks 4000 karakter per permintaan; cache WAV disimpan 24 jam di `storage/app/private/tts`.

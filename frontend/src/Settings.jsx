@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, API_URL } from './api.js';
+import { speak, stopSpeech } from './speech.js';
 
 const PALETTES = [
   { key: 'klasik', label: 'Klasik', colors: ['#425B9A', '#76C0EC', '#FFF6DC', '#FF95A5'] },
@@ -27,6 +28,11 @@ export default function Settings() {
   const [maxMb, setMaxMb] = useState(20);
   const [sttModel, setSttModel] = useState('small');
   const [sttLang, setSttLang] = useState('id');
+  const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [ttsVoice, setTtsVoice] = useState('');
+  const [ttsSpeed, setTtsSpeed] = useState(1);
+  const [voices, setVoices] = useState([]);
+  const [testingVoice, setTestingVoice] = useState(false);
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [generalMsg, setGeneralMsg] = useState(null);
   const [palette, setPalette] = useState(() => localStorage.getItem('palette') || 'klasik');
@@ -35,9 +41,10 @@ export default function Settings() {
   useEffect(() => {
     (async () => {
       try {
-        const [models, settings] = await Promise.all([
+        const [models, settings, ttsVoices] = await Promise.all([
           api('/api/models'),
           api('/api/settings'),
+          api('/api/tts/voices').catch(() => ({ voices: [] })),
         ]);
 
         setModels(models.models);
@@ -52,6 +59,10 @@ export default function Settings() {
         }
         if (settings.stt_model) setSttModel(settings.stt_model);
         if (settings.stt_language) setSttLang(settings.stt_language);
+        setVoices(ttsVoices.voices || []);
+        setTtsEnabled(Boolean(Number(settings.tts_enabled ?? 1)));
+        setTtsVoice(settings.tts_voice || ttsVoices.default || '');
+        if (settings.tts_speed) setTtsSpeed(settings.tts_speed);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -67,14 +78,42 @@ export default function Settings() {
     try {
       await api('/api/settings', {
         method: 'POST',
-        body: JSON.stringify({ ai_timeout: Number(timeoutSec), max_upload_mb: Number(maxMb), stt_model: sttModel, stt_language: sttLang }),
+        body: JSON.stringify({
+          ai_timeout: Number(timeoutSec),
+          max_upload_mb: Number(maxMb),
+          stt_model: sttModel,
+          stt_language: sttLang,
+          tts_enabled: ttsEnabled,
+          tts_voice: ttsVoice,
+          tts_speed: Number(ttsSpeed),
+        }),
       });
       localStorage.setItem('max-upload-mb', String(maxMb));
+      // Halaman chat mendengarkan agar preferensi TTS langsung terpakai.
+      window.dispatchEvent(new Event('hermes-settings-changed'));
       setGeneralMsg('Pengaturan tersimpan.');
     } catch (e) {
       setError(e.message);
     } finally {
       setSavingGeneral(false);
+    }
+  };
+
+  const testVoice = async () => {
+    setGeneralMsg(null);
+    setError(null);
+    if (testingVoice) {
+      stopSpeech();
+      setTestingVoice(false);
+      return;
+    }
+    setTestingVoice(true);
+    try {
+      await speak('Halo, ini contoh suara dari pengaturan suara.', { voice: ttsVoice, speed: Number(ttsSpeed) });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setTestingVoice(false);
     }
   };
 
@@ -191,7 +230,49 @@ export default function Settings() {
               <option value="auto">Deteksi otomatis</option>
             </select>
           </div>
+          <div>
+            <label htmlFor="ttsvoice" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+              Suara AI (text-to-speech)
+            </label>
+            <select
+              id="ttsvoice"
+              value={ttsVoice}
+              onChange={(e) => setTtsVoice(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
+            >
+              {voices.length === 0 && <option value="">(tidak ada model suara)</option>}
+              {voices.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.id} ({v.language})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="ttsspeed" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+              Kecepatan suara (0.5–2)
+            </label>
+            <input
+              id="ttsspeed"
+              type="number"
+              min={0.5}
+              max={2}
+              step={0.1}
+              value={ttsSpeed}
+              onChange={(e) => setTtsSpeed(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
+            />
+          </div>
         </div>
+        <label className="mt-3 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+          <input
+            type="checkbox"
+            checked={ttsEnabled}
+            onChange={(e) => setTtsEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand dark:border-slate-600"
+          />
+          Bacakan otomatis balasan di mode suara
+        </label>
         <button
           type="button"
           onClick={saveGeneral}
@@ -199,6 +280,14 @@ export default function Settings() {
           className="mt-3 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100"
         >
           {savingGeneral ? 'Menyimpan...' : 'Simpan pengaturan'}
+        </button>
+        <button
+          type="button"
+          onClick={testVoice}
+          disabled={!ttsVoice}
+          className="mt-3 ml-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-cream disabled:opacity-40 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-brand-800"
+        >
+          {testingVoice ? 'Hentikan tes' : 'Tes suara'}
         </button>
         {generalMsg && <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">{generalMsg}</p>}
       </div>

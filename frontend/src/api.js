@@ -126,6 +126,21 @@ export function apiQueue() {
   return api('/api/queue');
 }
 
+// Notifications: `after` = only items newer than that id (polling for
+// toasts/push); without it, the latest 30 (bell dropdown). Returns
+// { items, unread, latest }.
+export function apiNotifications(after = 0) {
+  return api(`/api/notifications${after ? `?after=${after}` : ''}`);
+}
+
+export function apiNotificationRead(id) {
+  return api(`/api/notifications/${id}/read`, { method: 'POST' });
+}
+
+export function apiNotificationsReadAll() {
+  return api('/api/notifications/read-all', { method: 'POST' });
+}
+
 export function apiQueueCancel(id) {
   return api(`/api/queue/${id}`, { method: 'DELETE' });
 }
@@ -133,6 +148,34 @@ export function apiQueueCancel(id) {
 // Single task by id (for polling a build).
 export function apiQueueTask(id) {
   return api(`/api/queue/${id}`);
+}
+
+// ---- Text-to-speech (Piper) & voice input ----
+
+export function apiTtsVoices() {
+  return api('/api/tts/voices');
+}
+
+// Returns an audio Blob (audio/wav) — bypasses api()'s JSON handling.
+export async function apiTts(text, voice, speed) {
+  const res = await fetch(`${API_URL}/api/tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+    body: JSON.stringify({ text, voice, speed }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `TTS gagal (${res.status}).`);
+  }
+  return res.blob();
+}
+
+// Synchronous transcription (voice mode) — the queue is too slow for
+// back-and-forth conversation. Returns { text, language }.
+export function apiStt(blob) {
+  const fd = new FormData();
+  fd.append('audio', blob, 'voice.webm');
+  return apiUploadTo('/api/stt', fd);
 }
 
 // Stream the /api/chat response (SSE). Resolves with the final reply text.

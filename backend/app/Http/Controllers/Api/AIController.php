@@ -334,6 +334,9 @@ class AIController extends Controller
             'max_upload_mb' => (int) Setting::get('max_upload_mb', 20),
             'stt_model' => (string) Setting::get('stt_model', 'small'),
             'stt_language' => (string) Setting::get('stt_language', 'id'),
+            'tts_enabled' => (int) Setting::get('tts_enabled', 1),
+            'tts_voice' => (string) Setting::get('tts_voice', \App\Support\TTSService::defaultVoice()),
+            'tts_speed' => (float) Setting::get('tts_speed', 1),
             'hermes_status' => $this->hermesStatus(),
         ]);
     }
@@ -345,10 +348,17 @@ class AIController extends Controller
             'max_upload_mb' => 'sometimes|integer|min:1',
             'stt_model' => 'sometimes|string|in:tiny,base,small,medium,large-v3',
             'stt_language' => 'sometimes|string|max:10',
+            'tts_enabled' => 'sometimes|boolean',
+            'tts_voice' => 'sometimes|string|max:100',
+            'tts_speed' => 'sometimes|numeric|min:0.5|max:2',
         ]);
 
+        if (isset($data['tts_voice']) && \App\Support\TTSService::modelPath($data['tts_voice']) === null) {
+            return response()->json(['error' => 'Model suara TTS tidak ditemukan.'], 422);
+        }
+
         foreach ($data as $key => $value) {
-            Setting::set($key, $value);
+            Setting::set($key, is_bool($value) ? (int) $value : $value);
         }
 
         return response()->json(['saved' => true] + $data);

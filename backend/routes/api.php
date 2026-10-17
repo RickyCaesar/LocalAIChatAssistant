@@ -5,9 +5,11 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\MediaController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\QueueController;
 use App\Http\Controllers\Api\SessionController;
 use App\Http\Controllers\Api\SkillController;
+use App\Http\Controllers\Api\TTSController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\EnsureBearerToken;
@@ -42,6 +44,14 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::post('/queue/convert', [QueueController::class, 'storeConvert']);
     Route::post('/queue/notulensi', [QueueController::class, 'storeNotulensi']);
     Route::delete('/queue/{id}', [QueueController::class, 'destroy']);
+
+    Route::get('/tts/voices', [TTSController::class, 'voices']);
+    Route::post('/tts', [TTSController::class, 'speak']);
+    Route::post('/stt', [TTSController::class, 'stt']);
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'read']);
 
     Route::get('/models', [AIController::class, 'models']);
 
