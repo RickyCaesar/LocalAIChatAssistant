@@ -86,6 +86,12 @@ function FileChip({ href, label }) {
 
 const markdownComponents = {
   pre: ({ children }) => <>{children}</>,
+  // Tabel lebar discroll di dalam bubble sendiri, bukan melebarkan halaman.
+  table: ({ children }) => (
+    <div className="overflow-x-auto">
+      <table>{children}</table>
+    </div>
+  ),
   a: ({ href, children }) => {
     if (href && href.startsWith('/api/media/')) {
       return <FileChip href={href} label={String(children)} />;
@@ -1029,7 +1035,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-cream text-slate-900 transition-colors dark:bg-brand-950 dark:text-slate-100">
+    <div className="flex h-dvh bg-cream text-slate-900 transition-colors dark:bg-brand-950 dark:text-slate-100">
       <div
         className={`fixed inset-0 z-30 bg-black/40 transition-opacity duration-300 lg:hidden ${
           sidebarOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
@@ -1139,7 +1145,7 @@ export default function App() {
             </>
           )}
         </div>
-        <div className="border-t border-slate-200 p-3 dark:border-slate-800">
+        <div className="border-t border-slate-200 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-slate-800">
           <div className="space-y-1">
             {isAdmin && (
               <NavButton
@@ -1178,7 +1184,7 @@ export default function App() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-brand-900/90">
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur dark:border-slate-800 dark:bg-brand-900/90">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-3">
             <div className="flex min-w-0 items-center gap-2.5">
               <button
@@ -1331,7 +1337,7 @@ export default function App() {
                 setDragOver(false);
                 handleFiles(e.dataTransfer.files);
               }}
-              className={`border-t border-slate-200 bg-white/80 px-4 pb-3 pt-4 backdrop-blur transition dark:border-slate-800 dark:bg-brand-900/90 ${
+              className={`border-t border-slate-200 bg-white/80 px-4 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur transition dark:border-slate-800 dark:bg-brand-900/90 ${
                 dragOver ? 'bg-skyblue/20 dark:bg-brand-800/80' : ''
               }`}
             >
@@ -1398,7 +1404,7 @@ export default function App() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Send a message to Hermes..."
+                  placeholder="Tulis pesan..."
                   className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-[0.95rem] outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
                 <button

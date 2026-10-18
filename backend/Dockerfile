@@ -60,11 +60,16 @@ ENV AI_API_URL=http://host.docker.internal:8642/v1/chat/completions \
 RUN printf 'upload_max_filesize=0\npost_max_size=0\nmemory_limit=512M\nmax_execution_time=0\n' > /usr/local/etc/php/conf.d/uploads.ini
 
 # STT runtime: interpreter, model cache inside the writable storage volume.
+# WORKERS: `php artisan serve` is single-thread by default, so one blocking
+# request (sync /api/stt) freezes healthcheck and the whole API. Laravel only
+# honors PHP_CLI_SERVER_WORKERS with --no-reload (hence the flag in CMD);
+# trade-off: editing .env now needs a container restart instead of auto-reload.
 ENV STT_PYTHON=/opt/stt/bin/python \
     HF_HOME=/app/storage/app/stt-models \
     HF_HUB_DISABLE_TELEMETRY=1 \
-    TTS_PIPER=/opt/stt/bin/piper
+    TTS_PIPER=/opt/stt/bin/piper \
+    PHP_CLI_SERVER_WORKERS=4
 
 EXPOSE 8000
 
-CMD sh -c "php artisan migrate --force --no-interaction && php artisan serve --host=0.0.0.0 --port=8000"
+CMD sh -c "php artisan migrate --force --no-interaction && php artisan serve --host=0.0.0.0 --port=8000 --no-reload"

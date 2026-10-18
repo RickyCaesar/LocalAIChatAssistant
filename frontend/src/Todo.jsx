@@ -136,7 +136,7 @@ export default function TodoList() {
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             placeholder="Tambah tugas..."
             maxLength={255}
-            className={`min-w-0 flex-1 ${input}`}
+            className={`min-w-0 flex-1 basis-full sm:basis-auto ${input}`}
           />
           <input type="datetime-local" value={form.dueAt} onChange={(e) => setForm((f) => ({ ...f, dueAt: e.target.value }))} className={input} />
           <select value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} className={input}>

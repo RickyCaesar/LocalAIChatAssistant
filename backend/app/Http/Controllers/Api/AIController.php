@@ -295,23 +295,24 @@ class AIController extends Controller
 
     private function queueStats(): array
     {
-        $done = \App\Models\Task::where('status', 'done');
-        $avg = (int) round((clone $done)->whereNotNull('duration_seconds')->avg('duration_seconds') ?? 0);
+        // Durasi selalu dihitung dari started_at -> finished_at (kolom
+        // duration_seconds tidak pernah diisi; lihat Task::getDurationAttribute).
+        $done = \App\Models\Task::where('status', 'done')->get(['type', 'started_at', 'finished_at']);
 
         return [
             'total' => \App\Models\Task::count(),
-            'done' => (clone $done)->count(),
+            'done' => $done->count(),
             'error' => \App\Models\Task::where('status', 'error')->count(),
             'active' => \App\Models\Task::whereIn('status', ['queued', 'processing'])->count(),
-            'avg_duration' => $avg,
-            'by_type' => \App\Models\Task::selectRaw('type, COUNT(*) as total, AVG(duration_seconds) as avg_duration')
+            'avg_duration' => (int) round($done->avg('duration') ?? 0),
+            'by_type' => \App\Models\Task::selectRaw('type, COUNT(*) as total')
                 ->groupBy('type')
                 ->orderByDesc('total')
                 ->get()
                 ->map(fn ($t) => [
                     'type' => (string) $t->type,
                     'count' => (int) $t->total,
-                    'avg_duration' => (int) round((float) $t->avg_duration),
+                    'avg_duration' => (int) round($done->where('type', $t->type)->avg('duration') ?? 0),
                 ]),
         ];
     }

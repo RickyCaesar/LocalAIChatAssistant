@@ -285,7 +285,7 @@ export default function CalendarPage() {
                 const holiday = holidayFor(key);
                 const dayEvents = byDay[key] || [];
                 return (
-                  <div key={key} className={`min-h-40 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700 ${key === todayKey ? 'ring-2 ring-brand dark:ring-skyblue' : ''}`}>
+                  <div key={key} className={`rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200 sm:min-h-40 dark:bg-brand-900 dark:ring-slate-700 ${key === todayKey ? 'ring-2 ring-brand dark:ring-skyblue' : ''}`}>
                     <div className={`text-xs font-semibold ${holiday || d.getDay() === 0 ? 'text-red-500' : ''}`}>
                       {DAY_NAMES[d.getDay()]} {d.getDate()}
                     </div>

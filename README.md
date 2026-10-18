@@ -60,8 +60,42 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
    ```
 
 4. Akses aplikasi:
-   - **Frontend:** http://localhost:5173
+   - **Frontend (desktop):** http://localhost:5173 — mikrofon tetap jalan karena `localhost` termasuk secure context.
+   - **Frontend (HP, satu Wi-Fi):** https://<IP-Windows>:5174 — wajib HTTPS; lihat *Akses dari HP & sertifikat*.
    - **Backend API:** http://localhost:8000
+
+### Akses dari HP & sertifikat
+
+Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTTPS. Dari HP, buka `https://<IP-Windows>:5174` (di HP Chromium, HTTP biasa membuat `navigator.mediaDevices` undefined — ini yang bikin tombol mikrofon gagal).
+
+- **Buat sertifikat LAN sekali** dari root repo (openssl, tanpa dependensi tambahan):
+
+  ```bash
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 \
+    -keyout certs/ca-key.pem -out certs/ca.pem -subj "/CN=MyAssistant Local CA" \
+    -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign"
+  openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+    -keyout certs/key.pem -out /tmp/leaf.csr -subj "/CN=<IP-Windows>"
+  printf 'subjectAltName=IP:<IP-Windows>,IP:127.0.0.1,DNS:localhost\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n' > /tmp/leaf.ext
+  openssl x509 -req -in /tmp/leaf.csr -CA certs/ca.pem -CAkey certs/ca-key.pem -CAcreateserial \
+    -out certs/cert.pem -days 825 -extfile /tmp/leaf.ext
+  docker compose up -d frontend
+  ```
+
+  Ulangi dengan IP baru kalau IP LAN berubah.
+- **Android (Chrome):** cukup buka `https://<IP-Windows>:5174`, lalu *Advanced → Proceed* — mikrofon bisa dipakai. Bebas peringatan: pasang `certs/ca.pem` lewat *Settings → Security → Install a certificate → CA certificate*.
+- **iPhone (Safari):** **wajib** pasang CA (Safari memblokir mikrofon pada sertifikat yang belum dipercaya). Sajikan **hanya** `certs/ca.pem` — jangan folder `certs`, ada kunci privat di dalamnya:
+
+  ```bash
+  mkdir -p /tmp/ca-share && cp certs/ca.pem /tmp/ca-share/myassistant-ca.crt
+  python3 -m http.server 8088 --directory /tmp/ca-share
+  ```
+
+  Buka `http://<IP-Windows>:8088/myassistant-ca.crt` di Safari, *Settings → Profile Downloaded → Install*, lalu *Settings → General → About → Certificate Trust Settings* → aktifkan penuh. Hentikan server python setelah selesai.
+
+- Frontend memakai `./certs/cert.pem` + `./certs/key.pem` bila ada; kalau tidak, self-signed bawaan (`10-pick-certs.sh`).
+- Kalau di Windows Anda memakai `netsh portproxy` untuk meneruskan ke WSL, tambahkan port **5174** juga.
+- Halaman HTTPS memanggil API lewat nginx (`/api` di-proxy ke backend, same-origin), jadi tak ada mixed content dan port 8000 tidak perlu dibuka ke HP.
 
 > Kode backend/frontend **di-bake ke image**. Setiap perubahan kode perlu rebuild:
 > `docker compose up -d --build backend frontend` (atau salah satu saja).
@@ -143,6 +177,8 @@ Notifikasi dibuat otomatis saat tugas antrean selesai atau gagal (transkripsi, k
 
 ## Mode Suara (TTS & STT)
 
+Perekaman mikrofon butuh **secure context**: `localhost` atau HTTPS — dari HP buka lewat `https://<IP-Windows>:5174` (lihat *Akses dari HP & sertifikat*). Di HTTP biasa, tombol mikrofon menampilkan pesan dan tidak berfungsi.
+
 - **Bacakan**: tiap balasan AI punya tombol **Bacakan** untuk memutar suara (Piper). Klik lagi untuk berhenti; hanya satu audio diputar pada satu waktu.
 - **Mode Suara** (tombol gelombang di samping kotak chat): alur hands-free dua arah —
   1. Klik **mikrofon** lalu bicara (klik lagi untuk berhenti & kirim). Rekaman otomatis berhenti setelah **20 detik**.
@@ -209,7 +245,7 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - Transkripsi, konversi video→MP3, dan notulensi AI diproses **asinkron di antrean** oleh container `queue-worker`; STT tetap di CPU (mode `int8`) sehingga model besar terasa lambat, tetapi tidak lagi memblokir request lain. Satu worker = antrean berurutan, jadi tugas kedua menunggu yang pertama selesai.
 - Persentase progres transkripsi/konversi berasal dari posisi segmen/frame terhadap durasi berkas; untuk notulensi AI, persentase adalah estimasi berbasis waktu (konstanta throughput di `RunTask::runNotulensiStream`, bisa dikalibrasi).
 - OCR dan ekstraksi teks (gambar/dokumen) masih dilakukan **sinkron saat unggah**; berkas besar atau deck banyak slide bisa membuat unggahan lambat.
-- `php artisan serve` berjalan single-thread, jadi request berat yang belum dipindah ke antrean bisa saling menunggu. Cukup untuk pemakaian lokal.
+- `php artisan serve` berjalan dengan `PHP_CLI_SERVER_WORKERS=4` (fork bawaan PHP), jadi satu request berat yang belum dipindah ke antrean tidak membekukan healthcheck/API — sisanya menunggu worker kosong. Cukup untuk pemakaian lokal. Laravel hanya mengaktifkan ini dengan flag `--no-reload` (lihat `Dockerfile`); konsekuensinya, mengubah `backend/.env` butuh restart container, bukan auto-reload.
 - Server dan `queue-worker` berbagi **satu file SQLite** yang di-mount sebagai file tunggal; karena itu mode jurnal dipaksa `delete` (bukan WAL) + `busy_timeout` 5s agar tidak "database is locked". Untuk konkurensi lebih berat, pindahkan DB ke direktori bersama (agar WAL bisa dipakai) atau ke Postgres.
 - `DocumentBuilder` menghasilkan XLSX minimal (tabel/daftar berjudul, header tebal) tanpa rumus/grafik/pivot, dan hanya mendukung `.xlsx`.
 - Pembuatan PPTX memakai **marp-cli + Chromium** (Chromium sudah ada untuk konversi). Tema presentasi adalah **6 set tetap**; menambah tema = entri di `Presentasi.jsx` + variabel CSS Marp.
@@ -222,8 +258,8 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - Acara berulang di-expand di sisi klien (maks 400 kejadian per event); edit/hapus berlaku untuk **seluruh seri**, bukan satu kejadian.
 - Pencarian & filter Gallery berjalan di sisi klien (memuat seluruh daftar media).
 - Token media dikirim lewat query `?auth=` (keterbatasan `<img>`/`<iframe>`), sehingga bisa muncul di log akses.
-- Notifikasi diambil lewat **polling 3 detik** (bersamaan dengan poll antrean), bukan SSE/WebSocket: backend berjalan `php artisan serve` yang single-thread, sehingga stream panjang akan memblokir seluruh API. Di tab yang tidak aktif, browser men-throttle timer (bisa jadi ~1 menit), jadi notifikasi OS bisa tertunda; upgrade ke Service Worker + Push API untuk notifikasi instan.
+- Notifikasi diambil lewat **polling 3 detik** (bersamaan dengan poll antrean), bukan SSE/WebSocket: cukup untuk volume sekarang tanpa infrastruktur streaming. Di tab yang tidak aktif, browser men-throttle timer (bisa jadi ~1 menit), jadi notifikasi OS bisa tertunda; upgrade ke Service Worker + Push API untuk notifikasi instan.
 - Notifikasi tidak dibuat untuk aksi `ACTION:` (TODO/DOC_BUILD/GENERATE_PPTX) karena semuanya dieksekusi sinkron di dalam request chat — hasilnya sudah tampil di balasan.
-- `POST /api/stt` (Mode Suara) sengaja **sinkron** karena jeda antrean (worker poll 3 dtk) terlalu lama untuk percakapan. Konsekuensinya, selama transkripsi berjalan server `php artisan serve` yang single-thread tidak melayani request lain. Dengan model `small` + `int8` klip pendek ≈ 5–10 dtk (panggilan pertama memuat model); dengan `large-v3` bisa > 1 menit — set `small`/`base` di Settings untuk voice mode.
+- `POST /api/stt` (Mode Suara) sengaja **sinkron** karena jeda antrean (worker poll 3 dtk) terlalu lama untuk percakapan. Berkat 4 worker di atas, request lain tetap dilayani selama transkripsi; tapi tiap STT memakai 1 worker, jadi jangan menumpuk banyak sekaligus (sisa worker bisa habis dan lock SQLite menunggu `busy_timeout`). Dengan model `small` + `int8` klip pendek ≈ 5–10 dtk (panggilan pertama memuat model); dengan `large-v3` bisa > 1 menit — set `small`/`base` di Settings untuk voice mode.
 - Mode suara belum memakai VAD (deteksi keheningan): rekaman berhenti lewat klik atau batas 20 detik. Upgrade: `AnalyserNode` untuk memutus otomatis saat hening.
 - TTS memakai Piper (CPU) dengan panjang teks maks 4000 karakter per permintaan; cache WAV disimpan 24 jam di `storage/app/private/tts`.

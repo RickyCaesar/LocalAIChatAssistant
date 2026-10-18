@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // Browser push (OS) hanya untuk item BARU — dipanggil App.jsx saat polling
 // menemukan notifikasi yang belum pernah ditampilkan.
@@ -82,6 +82,16 @@ function PermissionRow() {
 export function NotificationBell({ items, unread, onRead, onReadAll, onOpen }) {
   const [open, setOpen] = useState(false);
 
+  // Klik di mana pun (selain panel) menutup dropdown. Overlay <div fixed>
+  // tidak bisa dipakai: header ber-backdrop-blur jadi containing block untuk
+  // fixed, overlay-nya cuma setinggi header.
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [open]);
+
   return (
     <div className="relative">
       <button
@@ -101,8 +111,10 @@ export function NotificationBell({ items, unread, onRead, onReadAll, onOpen }) {
 
       {open && (
         <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
+          <div
+            className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700 max-sm:fixed max-sm:inset-x-3 max-sm:top-16 max-sm:mt-0 max-sm:w-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Notifikasi</span>
               {unread > 0 && (

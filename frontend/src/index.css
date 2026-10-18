@@ -90,7 +90,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* iOS Safari auto-zoom saat input fokus bila font < 16px (bikin halaman
+   terasa "tidak responsive"). !important karena mengalahkan utility Tailwind. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Chat markdown defaults (applied on the AI bubble content) */
+.prose-chat {
+  /* URL/kata panjang tanpa spasi ikut patah, jangan melebarkan bubble. */
+  overflow-wrap: anywhere;
+}
 .prose-chat p {
   margin: 0.35rem 0;
 }
@@ -138,6 +152,8 @@ body {
 .prose-chat table {
   border-collapse: collapse;
   margin: 0.5rem 0;
+  /* Sel tabel tidak ikut dipatahkan; tabel lebar discroll lewat pembungkusnya. */
+  overflow-wrap: normal;
 }
 .prose-chat th,
 .prose-chat td {

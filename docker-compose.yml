@@ -44,6 +44,9 @@ services:
     container_name: ai-chat-frontend
     restart: unless-stopped
     ports:
-      - "5173:80"
+      - "5173:80"   # HTTP (desktop)
+      - "5174:443"  # HTTPS untuk HP: mikrofon butuh secure context
+    volumes:
+      - ./certs:/certs-host:ro   # sertifikat mkcert opsional, lihat README
     depends_on:
       - backend

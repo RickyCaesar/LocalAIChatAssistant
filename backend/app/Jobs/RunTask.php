@@ -70,19 +70,9 @@ class RunTask implements ShouldQueue
             'status' => 'error',
             'error' => $e->getMessage(),
             'finished_at' => now(),
-            'duration_seconds' => $this->getTaskDuration($this->taskId),
         ]);
 
         NotificationService::taskFinished($task);
-    }
-
-    private function getTaskDuration(int $id): ?int
-    {
-        $task = Task::find($id);
-        if ($task && $task->started_at) {
-            return max(0, now()->diffInSeconds($task->started_at, false));
-        }
-        return null;
     }
 
     private function runConvert(Task $task): void
@@ -130,7 +120,6 @@ class RunTask implements ShouldQueue
             'status' => 'done',
             'progress' => 100,
             'finished_at' => now(),
-            'duration_seconds' => $task->started_at ? max(0, now()->diffInSeconds($task->started_at, false)) : null,
             'result' => [
                 'media_id' => (string) $media->id,
                 'url' => '/api/media/'.$media->id,
@@ -166,7 +155,6 @@ class RunTask implements ShouldQueue
             'status' => 'done',
             'progress' => 100,
             'finished_at' => now(),
-            'duration_seconds' => $task->started_at ? max(0, now()->diffInSeconds($task->started_at, false)) : null,
             'result' => [
                 'text' => (string) ($data['text'] ?? ''),
                 'language' => $data['language'] ?? null,
@@ -197,7 +185,6 @@ class RunTask implements ShouldQueue
             'status' => 'done',
             'progress' => 100,
             'finished_at' => now(),
-            'duration_seconds' => $task->started_at ? max(0, now()->diffInSeconds($task->started_at, false)) : null,
             'result' => [
                 'media_id' => (string) $media->id,
                 'url' => '/api/media/'.$media->id,
@@ -253,7 +240,6 @@ class RunTask implements ShouldQueue
             'status' => 'done',
             'progress' => 100,
             'finished_at' => now(),
-            'duration_seconds' => $task->started_at ? max(0, now()->diffInSeconds($task->started_at, false)) : null,
             'result' => ['text' => $text],
         ]);
     }

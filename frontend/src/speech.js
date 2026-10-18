@@ -43,6 +43,9 @@ export function speak(text, { voice, speed } = {}) {
 // Perekam mikrofon (MediaRecorder → webm/opus, format yang dipakai STT).
 // stop() mengembalikan Promise<Blob>.
 export async function startRecording() {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    throw new Error('buka lewat HTTPS atau localhost — browser memblokir mikrofon di HTTP.');
+  }
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const chunks = [];
   const rec = new MediaRecorder(stream);

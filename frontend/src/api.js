@@ -1,6 +1,10 @@
+// Di HTTPS (HP lewat nginx) API dipanggil same-origin — nginx mem-proxy /api
+// ke backend. Di HTTP (localhost) langsung ke port 8000.
 export const API_URL =
   import.meta.env.VITE_API_URL ||
-  `${window.location.protocol}//${window.location.hostname}:8000`;
+  (window.location.protocol === 'https:'
+    ? ''
+    : `${window.location.protocol}//${window.location.hostname}:8000`);
 
 export function getToken() {
   return localStorage.getItem('hermes-token');

@@ -36,13 +36,11 @@ class Task extends Model
 
     public function getDurationAttribute(): ?int
     {
-        if ($this->duration_seconds !== null) {
-            return $this->duration_seconds;
-        }
+        // Selalu hitung dari timestamp (kolom duration_seconds tak pernah diisi).
         if ($this->started_at && $this->finished_at) {
-            return max(0, $this->finished_at->diffInSeconds($this->started_at, false));
+            return (int) $this->started_at->diffInSeconds($this->finished_at);
         }
 
-        return null;
+        return $this->duration_seconds;
     }
 }
