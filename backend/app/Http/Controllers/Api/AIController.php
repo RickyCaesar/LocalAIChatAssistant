@@ -339,6 +339,9 @@ class AIController extends Controller
             'tts_voice' => (string) Setting::get('tts_voice', \App\Support\TTSService::defaultVoice()),
             'tts_speed' => (float) Setting::get('tts_speed', 1),
             'hermes_status' => $this->hermesStatus(),
+            // Tema global (diatur admin) — semua user mengikutinya.
+            'theme_palette' => (string) Setting::get('theme_palette', 'klasik'),
+            'theme_dark' => (string) Setting::get('theme_dark', 'nila'),
         ]);
     }
 
@@ -352,6 +355,8 @@ class AIController extends Controller
             'tts_enabled' => 'sometimes|boolean',
             'tts_voice' => 'sometimes|string|max:100',
             'tts_speed' => 'sometimes|numeric|min:0.5|max:2',
+            'theme_palette' => 'sometimes|string|in:klasik,senja,mint',
+            'theme_dark' => 'sometimes|string|in:nila,ungu,hijau',
         ]);
 
         if (isset($data['tts_voice']) && \App\Support\TTSService::modelPath($data['tts_voice']) === null) {

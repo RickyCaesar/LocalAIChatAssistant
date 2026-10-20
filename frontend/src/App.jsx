@@ -17,7 +17,10 @@ import Convert from './Convert.jsx';
 import Presentasi from './Presentasi.jsx';
 import QueuePage from './Queue.jsx';
 import Skills from './Skills.jsx';
+import Profile from './Profile.jsx';
 import { NotificationBell, ToastContainer, browserNotify, chime } from './Notifications.jsx';
+// shortcut: pesan lama tanpa field at tidak menampilkan jam; tidak di-backfill.
+import { fmtWita } from './time.js';
 
 const mediaSrcFor = mediaSrc;
 
@@ -241,6 +244,9 @@ function MessageBubble({ message, speaking, onSpeak }) {
           {message.content && (
             <p className="whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed">{message.content}</p>
           )}
+          {message.at && (
+            <p className="mt-1 text-right text-[0.7rem] leading-none text-white/70">{fmtWita(message.at)}</p>
+          )}
         </div>
       </div>
     );
@@ -272,6 +278,9 @@ function MessageBubble({ message, speaking, onSpeak }) {
             {speaking ? <StopSoundIcon /> : <SpeakerIcon />}
             {speaking ? 'Hentikan' : 'Bacakan'}
           </button>
+        )}
+        {message.at && (
+          <p className="mt-1 text-right text-[0.7rem] leading-none text-slate-400 dark:text-slate-500">{fmtWita(message.at)}</p>
         )}
       </div>
     </div>
@@ -399,35 +408,151 @@ function UsersIcon() {
   );
 }
 
-function LogoutIcon() {
+// Menu profil di header: nama/email + Pengaturan akun + Keluar.
+function ProfileMenu({ user, isAdmin, onProfile, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  // Tutup saat klik di luar. Cek contains(), bukan stopPropagation: React bisa
+  // menjalankan effect ini sebelum event klik pembuka selesai naik ke document.
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => {
+      if (!menuRef.current?.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [open]);
+
+  const initial = (user?.name || user?.email || '?').trim().charAt(0).toUpperCase();
+
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <path d="m16 17 5-5-5-5" />
-      <path d="M21 12H9" />
-    </svg>
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Menu profil"
+        aria-expanded={open}
+        title="Menu profil"
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white transition hover:bg-brand-600 dark:bg-skyblue dark:text-brand-900 dark:hover:bg-skyblue/85"
+      >
+        {initial}
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 z-30 mt-2 w-60 overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700"
+        >
+          <div className="border-b border-slate-100 px-3 py-2 dark:border-slate-700">
+            <p className="truncate text-sm font-semibold">
+              {user?.name || 'Pengguna'}
+              {isAdmin && (
+                <span className="ml-1.5 rounded bg-skyblue/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-700 dark:bg-brand-800/40 dark:text-skyblue">
+                  admin
+                </span>
+              )}
+            </p>
+            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{user?.email}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onProfile();
+            }}
+            className="block w-full px-3 py-2.5 text-left text-sm transition hover:bg-cream dark:hover:bg-brand-800"
+          >
+            Pengaturan akun
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onLogout();
+            }}
+            className="block w-full border-t border-slate-100 px-3 py-2.5 text-left text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-slate-700 dark:text-red-400 dark:hover:bg-brand-800"
+          >
+            Keluar
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
-function NavButton({ active, onClick, icon, label, badge }) {
+function NavButton({ active, onClick, icon, label, badge, rail }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
+      title={rail ? label : undefined}
+      className={`relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
+        rail ? 'lg:justify-center lg:px-2' : ''
+      } ${
         active
           ? 'bg-skyblue/30 text-brand dark:bg-brand-800 dark:text-white'
           : 'text-slate-600 hover:bg-cream dark:text-slate-300 dark:hover:bg-brand-800/60'
       }`}
     >
       {icon}
-      <span className="flex-1 text-left">{label}</span>
+      <span className={`flex-1 whitespace-nowrap text-left ${rail ? 'lg:hidden' : ''}`}>{label}</span>
       {badge > 0 && (
-        <span className="rounded-full bg-brand px-1.5 py-0.5 text-[0.65rem] font-semibold text-white dark:bg-skyblue dark:text-brand-900">
+        <span
+          className={
+            rail
+              ? 'rounded-full bg-brand px-1.5 py-0.5 text-[0.65rem] font-semibold text-white lg:absolute lg:right-1 lg:top-1 lg:h-2 lg:w-2 lg:p-0 lg:text-[0px] dark:bg-skyblue'
+              : 'rounded-full bg-brand px-1.5 py-0.5 text-[0.65rem] font-semibold text-white dark:bg-skyblue dark:text-brand-900'
+          }
+        >
           {badge}
         </span>
       )}
     </button>
+  );
+}
+
+// Grup pemilik tiap halaman — dipakai untuk auto-buka grup menu yang aktif.
+const PAGE_GROUP = {
+  chat: 'utama',
+  gallery: 'utama',
+  todos: 'utama',
+  calendar: 'utama',
+  transcribe: 'alat',
+  notulensi: 'alat',
+  convert: 'alat',
+  presentasi: 'alat',
+  queue: 'alat',
+  dashboard: 'admin',
+  users: 'admin',
+  skills: 'admin',
+  settings: 'admin',
+};
+
+function NavGroup({ label, open, onToggle, rail, children }) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className={`flex w-full items-center justify-between px-3 pb-1 pt-3 ${rail ? 'lg:hidden' : ''}`}
+      >
+        <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-slate-600 dark:text-white">{label}</span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`h-3 w-3 text-slate-400 transition-transform dark:text-slate-300 ${open ? 'rotate-90' : ''}`}
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </button>
+      {(open || rail) && children}
+    </div>
   );
 }
 
@@ -557,9 +682,11 @@ function SparklesIcon() {
 export default function App() {
   const [auth, setAuth] = useState(() => Boolean(localStorage.getItem('hermes-token')));
   const [isAdmin, setIsAdmin] = useState(false);
+  const [user, setUser] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [activeId, setActiveId] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Desktop langsung terbuka penuh; mobile mulai dengan drawer tertutup.
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
   const [page, setPage] = useState('chat');
   const [queue, setQueue] = useState([]);
   const [notifs, setNotifs] = useState([]);
@@ -572,6 +699,25 @@ export default function App() {
   const [uploadError, setUploadError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [streamText, setStreamText] = useState('');
+
+  // Ikut breakpoint saat resize/rotate: desktop terbuka penuh, mobile drawer tertutup.
+  // shortcut: pilihan manual expand/minimize di-reset saat melewati breakpoint lg.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = (e) => setSidebarOpen(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  // Grup menu bisa dibuka/tutup: default semua tertutup kecuali Percakapan,
+  // plus grup yang berisi menu aktif ikut terbuka saat halaman berganti.
+  const [openGroups, setOpenGroups] = useState({ utama: false, alat: false, percakapan: true, admin: false });
+  const toggleGroup = (key) => setOpenGroups((g) => ({ ...g, [key]: !g[key] }));
+
+  useEffect(() => {
+    const group = PAGE_GROUP[page];
+    if (group) setOpenGroups((g) => (g[group] ? g : { ...g, [group]: true }));
+  }, [page]);
   const [progress, setProgress] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [dark, setDark] = useState(() => {
@@ -726,42 +872,50 @@ export default function App() {
   useEffect(() => {
     if (!auth) {
       setIsAdmin(false);
+      setUser(null);
       return;
     }
     api('/api/me')
-      .then((data) => setIsAdmin(Boolean(data.user && data.user.is_admin)))
+      .then((data) => {
+        setIsAdmin(Boolean(data.user && data.user.is_admin));
+        setUser(data.user || null);
+      })
       .catch(() => {});
   }, [auth]);
 
-  // Preferensi TTS (bisa diubah dari halaman Settings).
-  const loadTtsSettings = useCallback(() => {
+  // Preferensi TTS + tema global. Tema ditentukan admin di halaman Settings;
+  // localStorage hanya cache agar render pertama tidak berkedip.
+  const loadSettings = useCallback(() => {
     api('/api/settings')
-      .then((s) =>
+      .then((s) => {
         setTts({
           enabled: Boolean(Number(s.tts_enabled ?? 1)),
           voice: s.tts_voice || '',
           speed: Number(s.tts_speed) || 1,
-        })
-      )
+        });
+        if (s.theme_palette) {
+          document.documentElement.dataset.palette = s.theme_palette;
+          localStorage.setItem('palette', s.theme_palette);
+        }
+        if (s.theme_dark) {
+          document.documentElement.dataset.darkTheme = s.theme_dark;
+          localStorage.setItem('dark-theme', s.theme_dark);
+        }
+      })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!auth) return;
-    loadTtsSettings();
-    window.addEventListener('hermes-settings-changed', loadTtsSettings);
-    return () => window.removeEventListener('hermes-settings-changed', loadTtsSettings);
-  }, [auth, loadTtsSettings]);
+    loadSettings();
+    window.addEventListener('hermes-settings-changed', loadSettings);
+    return () => window.removeEventListener('hermes-settings-changed', loadSettings);
+  }, [auth, loadSettings]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
     localStorage.setItem('theme', dark ? 'dark' : 'light');
   }, [dark]);
-
-  useEffect(() => {
-    document.documentElement.dataset.palette = localStorage.getItem('palette') || 'klasik';
-    document.documentElement.dataset.darkTheme = localStorage.getItem('dark-theme') || 'nila';
-  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -850,6 +1004,7 @@ export default function App() {
     setSpeaking(null);
     clearToken();
     setAuth(false);
+    setUser(null);
     setSessions([]);
     setActiveId(null);
   };
@@ -868,7 +1023,7 @@ export default function App() {
         ...(m.image_ids && m.image_ids.length ? { image_ids: m.image_ids } : {}),
       }));
 
-    appendToActive((prev) => [...prev, { role: 'user', content: text, image_ids: imageIds }]);
+    appendToActive((prev) => [...prev, { role: 'user', content: text, image_ids: imageIds, at: new Date().toISOString() }]);
     setInput('');
     setPendingImages([]);
     setUploadError(null);
@@ -886,7 +1041,7 @@ export default function App() {
         }
       );
       setStreamText('');
-      appendToActive((prev) => [...prev, { role: 'assistant', content: reply }]);
+      appendToActive((prev) => [...prev, { role: 'assistant', content: reply, at: new Date().toISOString() }]);
       refreshMedia();
 
       // Mode suara: bacakan otomatis, lalu siap merekam lagi (hands-free).
@@ -1034,6 +1189,8 @@ export default function App() {
     return <AuthScreen onAuthenticated={() => setAuth(true)} />;
   }
 
+  const rail = !sidebarOpen;
+
   return (
     <div className="flex h-dvh bg-cream text-slate-900 transition-colors dark:bg-brand-950 dark:text-slate-100">
       <div
@@ -1044,75 +1201,94 @@ export default function App() {
       />
       <aside
         className={`flex w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-brand max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-2xl ${
-          sidebarOpen ? 'max-lg:translate-x-0 lg:ml-0' : 'max-lg:-translate-x-full lg:-ml-64'
+          sidebarOpen ? 'max-lg:translate-x-0 lg:w-64' : 'max-lg:-translate-x-full lg:w-16'
         }`}
       >
         <div className="border-b border-slate-200 p-3 dark:border-slate-800">
+          {/* rail: label grup tersembunyi, beri jarak dari menu di bawahnya */}
           <button
             type="button"
             onClick={newSession}
             disabled={page !== 'chat'}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100"
+            title={rail ? 'New chat' : undefined}
+            className={`flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100 ${
+              rail ? 'lg:mb-3' : ''
+            }`}
           >
             <PlusIcon />
-            New chat
+            <span className={rail ? 'lg:hidden' : ''}>New chat</span>
           </button>
-          <div className="mt-2 space-y-1">
-            <NavButton active={page === 'chat'} onClick={() => setPage('chat')} icon={<ChatIcon />} label="Chat" />
-            <NavButton
-              active={page === 'gallery'}
-              onClick={() => setPage('gallery')}
-              icon={<ImageSquareIcon />}
-              label="Gallery"
-            />
-            <NavButton
-              active={page === 'todos'}
-              onClick={() => setPage('todos')}
-              icon={<TodoIcon />}
-              label="Todo List"
-            />
-            <NavButton
-              active={page === 'calendar'}
-              onClick={() => setPage('calendar')}
-              icon={<CalendarIcon />}
-              label="Kalender"
-            />
-            <NavButton
-              active={page === 'transcribe'}
-              onClick={() => setPage('transcribe')}
-              icon={<MicIcon />}
-              label="Transkrip"
-            />
-            <NavButton
-              active={page === 'notulensi'}
-              onClick={() => setPage('notulensi')}
-              icon={<NotesIcon />}
-              label="Notulensi"
-            />
-            <NavButton
-              active={page === 'convert'}
-              onClick={() => setPage('convert')}
-              icon={<ConvertIcon />}
-              label="ConvertToAudio"
-            />
-            <NavButton
-              active={page === 'presentasi'}
-              onClick={() => setPage('presentasi')}
-              icon={<SlidesIcon />}
-              label="Presentasi"
-            />
-            <NavButton
-              active={page === 'queue'}
-              onClick={() => setPage('queue')}
-              icon={<QueueIcon />}
-              label="Antrean"
-              badge={activeCount}
-            />
-          </div>
+          <NavGroup label="Utama" open={openGroups.utama} onToggle={() => toggleGroup('utama')} rail={rail}>
+            <div className="space-y-1">
+              <NavButton active={page === 'chat'} onClick={() => setPage('chat')} icon={<ChatIcon />} label="Chat" rail={rail} />
+              <NavButton
+                active={page === 'gallery'}
+                onClick={() => setPage('gallery')}
+                icon={<ImageSquareIcon />}
+                label="Gallery"
+                rail={rail}
+              />
+              <NavButton
+                active={page === 'todos'}
+                onClick={() => setPage('todos')}
+                icon={<TodoIcon />}
+                label="Todo List"
+                rail={rail}
+              />
+              <NavButton
+                active={page === 'calendar'}
+                onClick={() => setPage('calendar')}
+                icon={<CalendarIcon />}
+                label="Kalender"
+                rail={rail}
+              />
+            </div>
+          </NavGroup>
+          <div className={`mx-2 my-2 hidden border-t border-slate-200 dark:border-slate-800 ${rail ? 'lg:block' : ''}`} />
+          <NavGroup label="Alat" open={openGroups.alat} onToggle={() => toggleGroup('alat')} rail={rail}>
+            <div className="space-y-1">
+              <NavButton
+                active={page === 'transcribe'}
+                onClick={() => setPage('transcribe')}
+                icon={<MicIcon />}
+                label="Transkrip"
+                rail={rail}
+              />
+              <NavButton
+                active={page === 'notulensi'}
+                onClick={() => setPage('notulensi')}
+                icon={<NotesIcon />}
+                label="Notulensi"
+                rail={rail}
+              />
+              <NavButton
+                active={page === 'convert'}
+                onClick={() => setPage('convert')}
+                icon={<ConvertIcon />}
+                label="ConvertToAudio"
+                rail={rail}
+              />
+              <NavButton
+                active={page === 'presentasi'}
+                onClick={() => setPage('presentasi')}
+                icon={<SlidesIcon />}
+                label="Presentasi"
+                rail={rail}
+              />
+              <NavButton
+                active={page === 'queue'}
+                onClick={() => setPage('queue')}
+                icon={<QueueIcon />}
+                label="Antrean"
+                badge={activeCount}
+                rail={rail}
+              />
+            </div>
+          </NavGroup>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
-          {page === 'chat' && (
-            <>
+          {!rail && page === 'chat' && (
+            <NavGroup label="Percakapan" open={openGroups.percakapan} onToggle={() => toggleGroup('percakapan')} rail={rail}>
             {sessions.map((session) => (
               <div
                 key={session.id}
@@ -1142,44 +1318,44 @@ export default function App() {
                 Belum ada percakapan.
               </p>
             )}
-            </>
+            </NavGroup>
           )}
         </div>
         <div className="border-t border-slate-200 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-slate-800">
-          <div className="space-y-1">
-            {isAdmin && (
-              <NavButton
-                active={page === 'dashboard'}
-                onClick={() => setPage('dashboard')}
-                icon={<ChartIcon />}
-                label="Dashboard"
-              />
-            )}
-            {isAdmin && (
-              <NavButton
-                active={page === 'users'}
-                onClick={() => setPage('users')}
-                icon={<UsersIcon />}
-                label="Pengguna"
-              />
-            )}
-            {isAdmin && (
-              <NavButton
-                active={page === 'skills'}
-                onClick={() => setPage('skills')}
-                icon={<SparklesIcon />}
-                label="Skill"
-              />
-            )}
-            {isAdmin && (
-              <NavButton
-                active={page === 'settings'}
-                onClick={() => setPage('settings')}
-                icon={<GearIcon />}
-                label="Settings"
-              />
-            )}
-          </div>
+          {isAdmin && (
+            <NavGroup label="Admin" open={openGroups.admin} onToggle={() => toggleGroup('admin')} rail={rail}>
+              <div className="space-y-1">
+                <NavButton
+                  active={page === 'dashboard'}
+                  onClick={() => setPage('dashboard')}
+                  icon={<ChartIcon />}
+                  label="Dashboard"
+                  rail={rail}
+                />
+                <NavButton
+                  active={page === 'users'}
+                  onClick={() => setPage('users')}
+                  icon={<UsersIcon />}
+                  label="Pengguna"
+                  rail={rail}
+                />
+                <NavButton
+                  active={page === 'skills'}
+                  onClick={() => setPage('skills')}
+                  icon={<SparklesIcon />}
+                  label="Skill"
+                  rail={rail}
+                />
+                <NavButton
+                  active={page === 'settings'}
+                  onClick={() => setPage('settings')}
+                  icon={<GearIcon />}
+                  label="Settings"
+                  rail={rail}
+                />
+              </div>
+            </NavGroup>
+          )}
         </div>
       </aside>
 
@@ -1190,7 +1366,9 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setSidebarOpen((v) => !v)}
-                aria-label="Toggle sessions"
+                aria-label={rail ? 'Perlebar menu' : 'Perkecil menu'}
+                title={rail ? 'Perlebar menu' : 'Perkecil menu'}
+                aria-expanded={sidebarOpen}
                 className="rounded-lg p-2 text-slate-600 transition hover:bg-cream dark:text-slate-300 dark:hover:bg-brand-800"
               >
                 <MenuIcon />
@@ -1224,7 +1402,9 @@ export default function App() {
                                         ? 'Antrean Proses'
                                         : page === 'skills'
                                       ? 'Skill Hermes'
-                                      : 'Settings'}
+                                      : page === 'profile'
+                                        ? 'Pengaturan Akun'
+                                        : 'Settings'}
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Local AI chat</p>
               </div>
@@ -1248,15 +1428,12 @@ export default function App() {
                   {runningTask ? `${runningTask.progress}%` : `${activeCount} antre`}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={logout}
-                aria-label="Log out"
-                title="Log out"
-                className="rounded-lg p-2 text-slate-600 transition hover:bg-cream dark:text-slate-300 dark:hover:bg-brand-800"
-              >
-                <LogoutIcon />
-              </button>
+              <ProfileMenu
+                user={user}
+                isAdmin={isAdmin}
+                onProfile={() => setPage('profile')}
+                onLogout={logout}
+              />
               <button
                 type="button"
                 onClick={() => setDark((v) => !v)}
@@ -1476,6 +1653,8 @@ export default function App() {
               <QueuePage tasks={queue} onCancel={cancelTask} />
             ) : page === 'skills' ? (
               <Skills />
+            ) : page === 'profile' ? (
+              <Profile user={user} onUserChange={setUser} />
             ) : (
               <Settings />
             )}

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Event;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class EventController extends Controller
 {
@@ -45,8 +46,8 @@ class EventController extends Controller
         $event = Event::create([
             'user_id' => auth()->id(),
             'title' => $data['title'],
-            'start_at' => $data['start_at'],
-            'end_at' => $data['end_at'] ?? null,
+            'start_at' => $this->toAppTz($data['start_at']),
+            'end_at' => isset($data['end_at']) ? $this->toAppTz($data['end_at']) : null,
             'description' => $data['description'] ?? null,
             'location' => $data['location'] ?? null,
             'recurrence' => $data['recurrence'] ?? 'none',
@@ -68,9 +69,24 @@ class EventController extends Controller
             'recurrence' => 'nullable|in:none,weekly,monthly,yearly',
         ]);
 
+        if (array_key_exists('start_at', $data)) {
+            $data['start_at'] = $this->toAppTz($data['start_at']);
+        }
+        if (array_key_exists('end_at', $data)) {
+            $data['end_at'] = $data['end_at'] === null ? null : $this->toAppTz($data['end_at']);
+        }
+
         $event->fill($data)->save();
 
         return response()->json(['event' => $this->serialize($event)]);
+    }
+
+    // Client mengirim ISO ber-offset (mis. ...Z). Cast datetime Laravel
+    // menyimpan jam dari instance apa adanya lalu membacanya sebagai
+    // config app.timezone, jadi konversi ke WITA dulu agar tidak bergeser.
+    private function toAppTz(string $value): Carbon
+    {
+        return Carbon::parse($value)->setTimezone(config('app.timezone'));
     }
 
     public function destroy(string $id)

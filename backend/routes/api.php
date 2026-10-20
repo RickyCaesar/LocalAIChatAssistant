@@ -20,6 +20,7 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
+    Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     Route::get('/sessions', [SessionController::class, 'index']);
@@ -72,10 +73,11 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
         Route::post('/users', [UserController::class, 'store']);
         Route::put('/users/{id}', [UserController::class, 'update']);
         Route::delete('/users/{id}', [UserController::class, 'destroy']);
+        Route::post('/settings', [AIController::class, 'updateSettings']);
+        Route::post('/settings/model', [AIController::class, 'updateModel']);
     });
+    // GET tetap terbuka: semua user membacanya untuk preferensi TTS + tema global.
     Route::get('/settings', [AIController::class, 'settings']);
-    Route::post('/settings', [AIController::class, 'updateSettings']);
-    Route::post('/settings/model', [AIController::class, 'updateModel']);
 });
 
 Route::get('/health', static function () {

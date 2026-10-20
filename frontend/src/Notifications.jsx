@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Browser push (OS) hanya untuk item BARU — dipanggil App.jsx saat polling
 // menemukan notifikasi yang belum pernah ditampilkan.
@@ -81,19 +81,24 @@ function PermissionRow() {
 
 export function NotificationBell({ items, unread, onRead, onReadAll, onOpen }) {
   const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
 
   // Klik di mana pun (selain panel) menutup dropdown. Overlay <div fixed>
   // tidak bisa dipakai: header ber-backdrop-blur jadi containing block untuk
-  // fixed, overlay-nya cuma setinggi header.
+  // fixed, overlay-nya cuma setinggi header. Cek contains(), bukan
+  // stopPropagation: React bisa menjalankan effect ini sebelum event klik
+  // pembuka selesai naik ke document (dropdown tak pernah terbuka).
   useEffect(() => {
     if (!open) return;
-    const close = () => setOpen(false);
+    const close = (e) => {
+      if (!menuRef.current?.contains(e.target)) setOpen(false);
+    };
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
   }, [open]);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={menuRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

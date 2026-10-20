@@ -55,7 +55,19 @@ class ActionRunner
         $todos = Todo::where('user_id', $userId)->where('done', false)->orderBy('id')->limit(200)->get();
         $events = Event::where('user_id', $userId)->where('start_at', '>=', now())->orderBy('start_at')->limit(200)->get();
 
-        $s = "CURRENT USER STATE — todo list & upcoming events (private data; use it to answer, but do not dump the entire list unless the user asks).\n";
+        $hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        $now = now();
+        $besok = $now->copy()->addDay();
+        $s = sprintf(
+            "WAKTU SEKARANG (WITA/Asia/Makassar, UTC+8): %s %s. Hari ini %s (%s); besok %s (%s). Hitung semua tanggal relatif (\"besok\", \"lusa\", \"minggu depan\") dari sini.\n",
+            $now->toDateString(),
+            $now->format('H:i'),
+            $now->toDateString(),
+            $hari[(int) $now->dayOfWeek],
+            $besok->toDateString(),
+            $hari[(int) $besok->dayOfWeek]
+        );
+        $s .= "CURRENT USER STATE — todo list & upcoming events (private data; use it to answer, but do not dump the entire list unless the user asks).\n";
         $s .= 'Todos (open only): '.($todos->isEmpty() ? 'none' : $todos->map(fn ($t) => sprintf('#%d "%s"', $t->id, $t->title))->join('; '))."\n";
         $s .= 'Events (upcoming): '.($events->isEmpty() ? 'none' : $events->map(fn ($e) => sprintf('%s %s "%s" (#%d)', $e->start_at->toDateString(), $e->start_at->format('H:i'), $e->title, $e->id))->join('; '));
 

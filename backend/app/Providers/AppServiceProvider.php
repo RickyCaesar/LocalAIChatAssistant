@@ -18,6 +18,13 @@ class AppServiceProvider extends ServiceProvider
             'database.connections.sqlite.journal_mode' => 'delete',
             'database.connections.sqlite.busy_timeout' => 5000,
         ]);
+
+        // Skeleton Laravel 12 mengunci config app.timezone ke 'UTC' (bukan env),
+        // jadi APP_TIMEZONE diterapkan sendiri di sini — config + default PHP.
+        if ($tz = env('APP_TIMEZONE')) {
+            config(['app.timezone' => $tz]);
+            date_default_timezone_set($tz);
+        }
     }
 
     public function boot(): void

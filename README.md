@@ -4,22 +4,22 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 ## Fitur
 
-- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka.
-- **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), menyusun presentasi (PPTX) bertema, serta mengirim berkas hasil olahan.
+- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** yang tampil di bubble.
+- **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), menyusun presentasi (PPTX) bertema, serta mengirim berkas hasil olahan. Hermes selalu diberi **waktu sekarang (WITA) + tanggal hari ini & besok**, jadi permintaan seperti "jadwalkan besok jam 9" menghasilkan tanggal yang tepat.
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
 - **Konversi video ke MP3** (menu **ConvertToAudio**): video (MP4/MKV/MOV/…) atau berkas audio lain → MP3. Memakai PyAV (venv STT yang sudah ada), jadi tak perlu `ffmpeg` sistem. Diproses **asinkron di antrean**.
 - **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pencarian**, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
 - **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper`; unggah via tombol atau **drag & drop**. Diproses **asinkron di antrean** (container `queue-worker`).
 - **Suara AI (Text-to-Speech)** lokal memakai **Piper** (CPU): tombol **Bacakan** di tiap balasan AI, plus **Mode Suara** dua arah (bicara → transkripsi → jawaban dibacakan otomatis → mikrofon siap lagi) — lihat *Mode Suara*.
-- **Antrean proses (menu Antrean)**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, dan posisi dalam antrean. Indikator ringkas tampil di header dari menu mana pun, dan progres tetap berjalan saat berpindah menu.
+- **Antrean proses (menu Antrean)**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, posisi dalam antrean, dan **jam selesai (WITA)**. Indikator ringkas tampil di header dari menu mana pun, dan progres tetap berjalan saat berpindah menu.
 - **Notifikasi**: lonceng di header dengan lencana belum dibaca, toast di kanan atas saat tugas antrean selesai/gagal, dan **notifikasi browser (OS)** opsional saat tab tidak aktif. Tersimpan per akun dan bisa ditandai dibaca.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — mis. tabel penugasan reviewer atau daftar tata tertib acara — lalu mengirimnya ke chat/Gallery.
 - **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
 - **Todo List**: prioritas (tinggi/sedang/rendah), catatan, edit inline, due date + jam, filter Semua/Aktif/Selesai.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang (mingguan/bulanan/tahunan), edit/hapus. Bisa juga dikendalikan dari chat.
-- **Pengaturan**: model AI, timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau).
+- **Pengaturan**: model AI, timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau) yang **berlaku untuk semua pengguna**.
 - **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent.
 - **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik — termasuk **kartu kuota/kredit Hermes**, Kelola Pengguna, Skill, Settings).
 
@@ -113,6 +113,7 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 | Variabel | Default | keterangan |
 |---|---|---|
 | `AI_API_URL` | `http://host.docker.internal:8642/v1/chat/completions` | endpoint gateway Hermes |
+| `APP_TIMEZONE` | `Asia/Makassar` | zona waktu aplikasi (WITA, UTC+8); stempel waktu & konteks tanggal Hermes mengikuti ini |
 | `AI_API_KEY` | `change-me-local-dev` | kunci gateway |
 | `AI_MODEL` | `hermes-agent` | nama model |
 | `AI_TIMEOUT` | `600` | timeout request AI (detik), dapat ditimpa dari Settings |
@@ -128,7 +129,7 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 
 ### Pengaturan dalam aplikasi (menu **Settings**, admin)
 
-Tersimpan di DB (model `Setting`): `ai_model`, `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`, `tts_enabled`, `tts_voice`, `tts_speed`. Pilihan **tema** (terang & gelap) dan sakelar **Mode Suara** disimpan di `localStorage` browser, bukan di server.
+Tersimpan di DB (model `Setting`): `ai_model`, `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`, `tts_enabled`, `tts_voice`, `tts_speed`, `theme_palette`, `theme_dark`. Tema berlaku global (disimpan admin); pilihan mode terang/gelap dan sakelar **Mode Suara** tetap per browser (`localStorage`).
 
 ## Integrasi dengan Hermes Agent
 
@@ -148,6 +149,8 @@ Selain mengirim berkas lewat baris `MEDIA:`, agent dapat memicu aksi berikut dar
 - `ACTION: TODO_ADD <judul>`, `TODO_DONE <judul|#id>`, `TODO_DEL <judul|#id>`
 - `ACTION: EVENT_ADD <YYYY-MM-DD HH:MM> | <judul>`, `EVENT_DEL <#id>`
 - `ACTION: DOC_BUILD <JSON satu baris>` — menyusun XLSX lalu mengirimnya ke chat/Gallery.
+
+Waktu dan tanggal relatif (`besok`, `lusa`, `minggu depan`) dihitung dari konteks waktu sekarang yang selalu disisipkan ke model: `WAKTU SEKARANG (WITA/Asia/Makassar, UTC+8): <tanggal> <jam>, hari ini ..., besok ...`. Semua jadwal yang dibuat `EVENT_ADD` disimpan dan ditampilkan dalam **WITA**.
 
 Skema JSON `DOC_BUILD` (dijelaskan ke model lewat `ActionRunner::toolsInstruction()`):
 
@@ -193,6 +196,8 @@ Perekaman mikrofon butuh **secure context**: `localhost` atau HTTPS — dari HP 
 - Registrasi & login terbuka melalui `/api/register` dan `/api/login`.
 - Autentikasi memakai **Bearer token** (disimpan di `localStorage` frontend); URL media membawa token via query `?auth=` karena `<img>`/`<iframe>` tidak bisa mengirim header.
 - **Admin** (kolom `is_admin`) mendapat menu tambahan: Dashboard, Pengguna, Skill, Settings.
+- **Menu profil** (foto/initial di header) membuka **Pengaturan akun** (ubah nama, email, password sendiri lewat `PUT /api/profile`; ganti password wajib menyertakan password saat ini) dan **Keluar**.
+- **Tema tampilan** (palet terang & gelap) diatur admin di Settings dan berlaku **untuk semua pengguna** (tersimpan di tabel `settings`; `POST /api/settings` khusus admin, `GET` tetap terbuka). Toggle mode gelap/terang tetap per pengguna.
 
 ## Struktur Proyek
 
@@ -213,11 +218,14 @@ backend/            Laravel API
   stt/toaudio.py              ekstrak audio → MP3 via PyAV (memancarkan progres)
   tests/document_builder_check.php  self-check penulis XLSX (php, tanpa framework)
   tests/eta_check.php         self-check rumus ETA (php, tanpa framework)
+  tests/profile_check.php     self-check endpoint profil + proteksi settings (php, butuh DB)
+  tests/timezone_check.php    self-check WITA: konteks Hermes, "besok", konversi ISO client (php, butuh DB)
   routes/api.php              definisi endpoint
 frontend/           React + Vite + Tailwind
   src/App.jsx                 shell, navigasi sidebar, chat, polling antrean global
-  src/*.jsx                   Gallery, Todo, Calendar, Transcribe, Convert, Presentasi, Notulensi, Queue, Skills, Settings, Users, Dashboard, Notifications (lonceng + toast)
+  src/*.jsx                   Gallery, Todo, Calendar, Transcribe, Convert, Presentasi, Notulensi, Queue, Skills, Settings, Users, Dashboard, Profile (akun), Notifications (lonceng + toast)
   src/holidays.js             helper hari libur Indonesia (date-holidays)
+  src/time.js                 helper format jam WITA (dipakai bubble chat & riwayat antrean)
   src/theme.css               override utilitas Tailwind agar memakai variabel tema (diimpor setelah index.css)
 tools/topdf.sh      konversi dokumen → PDF via container (dipakai agent dari chat)
 docker-compose.yml
@@ -227,7 +235,7 @@ docker-compose.yml
 
 Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 
-- **Auth:** `POST /api/register`, `POST /api/login`, `GET /api/me`, `POST /api/logout`
+- **Auth:** `POST /api/register`, `POST /api/login`, `GET /api/me`, `PUT /api/profile` (nama/email/password sendiri), `POST /api/logout`
 - **Sessions:** `GET|POST /api/sessions`, `PUT|DELETE /api/sessions/{id}`
 - **Chat:** `POST /api/chat` (streaming SSE), `GET /api/models`
 - **Media:** `GET|POST /api/media`, `GET|DELETE /api/media/{id}` (pratinjau inline; `?download=1` untuk unduh), `POST /api/media/{id}/pdf` (konversi berkas ke PDF)
@@ -237,7 +245,7 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - **Suara (TTS/STT):** `GET /api/tts/voices` (daftar model suara), `POST /api/tts` (`{text, voice?, speed?}` → `audio/wav`), `POST /api/stt` (unggah audio → `{text, language}`, sinkron untuk Mode Suara)
 - **Todo:** `GET|POST /api/todos`, `PUT|DELETE /api/todos/{id}`
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
-- **Settings:** `GET /api/settings`, `POST /api/settings`, `POST /api/settings/model`
+- **Settings:** `GET /api/settings` (semua user), `POST /api/settings` & `POST /api/settings/model` (**admin**)
 - **Admin:** `GET /api/analytics`, `GET /api/skills`, `GET|POST /api/users`, `PUT|DELETE /api/users/{id}`
 
 ## Batasan Diketahui
@@ -260,6 +268,8 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - Token media dikirim lewat query `?auth=` (keterbatasan `<img>`/`<iframe>`), sehingga bisa muncul di log akses.
 - Notifikasi diambil lewat **polling 3 detik** (bersamaan dengan poll antrean), bukan SSE/WebSocket: cukup untuk volume sekarang tanpa infrastruktur streaming. Di tab yang tidak aktif, browser men-throttle timer (bisa jadi ~1 menit), jadi notifikasi OS bisa tertunda; upgrade ke Service Worker + Push API untuk notifikasi instan.
 - Notifikasi tidak dibuat untuk aksi `ACTION:` (TODO/DOC_BUILD/GENERATE_PPTX) karena semuanya dieksekusi sinkron di dalam request chat — hasilnya sudah tampil di balasan.
+- **Zona waktu aplikasi = WITA** (`APP_TIMEZONE=Asia/Makassar`). Skeleton Laravel 12 mengunci `config/app.php` ke UTC, jadi nilainya diterapkan di `AppServiceProvider` (config + default PHP). Data lama digeser **+8 jam** sekali oleh migrasi `..._shift_timestamps_to_wita.php` agar momennya tidak berubah; migrasi itu sengaja tidak punya rollback (data sesudahnya sudah WITA). Tanggal dari client (`...Z`) dikonversi ke WITA di `EventController`/`TodoController` sebelum disimpan.
+- Pesan chat lama (sebelum ada cap waktu) tidak menampilkan jam — field `at` hanya ditulis untuk pesan baru; tidak di-backfill.
 - `POST /api/stt` (Mode Suara) sengaja **sinkron** karena jeda antrean (worker poll 3 dtk) terlalu lama untuk percakapan. Berkat 4 worker di atas, request lain tetap dilayani selama transkripsi; tapi tiap STT memakai 1 worker, jadi jangan menumpuk banyak sekaligus (sisa worker bisa habis dan lock SQLite menunggu `busy_timeout`). Dengan model `small` + `int8` klip pendek ≈ 5–10 dtk (panggilan pertama memuat model); dengan `large-v3` bisa > 1 menit — set `small`/`base` di Settings untuk voice mode.
 - Mode suara belum memakai VAD (deteksi keheningan): rekaman berhenti lewat klik atau batas 20 detik. Upgrade: `AnalyserNode` untuk memutus otomatis saat hening.
 - TTS memakai Piper (CPU) dengan panjang teks maks 4000 karakter per permintaan; cache WAV disimpan 24 jam di `storage/app/private/tts`.

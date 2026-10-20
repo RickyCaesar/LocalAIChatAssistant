@@ -63,6 +63,8 @@ export default function Settings() {
         setTtsEnabled(Boolean(Number(settings.tts_enabled ?? 1)));
         setTtsVoice(settings.tts_voice || ttsVoices.default || '');
         if (settings.tts_speed) setTtsSpeed(settings.tts_speed);
+        if (settings.theme_palette) setPalette(settings.theme_palette);
+        if (settings.theme_dark) setDarkTheme(settings.theme_dark);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -117,16 +119,25 @@ export default function Settings() {
     }
   };
 
+  // Tema tersimpan di server (berlaku untuk semua pengguna); event memicu App
+  // memuat ulang + memperbarui cache localStorage.
+  const saveTheme = (patch) => {
+    setError(null);
+    api('/api/settings', { method: 'POST', body: JSON.stringify(patch) })
+      .then(() => window.dispatchEvent(new Event('hermes-settings-changed')))
+      .catch((e) => setError(e.message));
+  };
+
   const pickPalette = (key) => {
     setPalette(key);
-    localStorage.setItem('palette', key);
     document.documentElement.dataset.palette = key;
+    saveTheme({ theme_palette: key });
   };
 
   const pickDarkTheme = (key) => {
     setDarkTheme(key);
-    localStorage.setItem('dark-theme', key);
     document.documentElement.dataset.darkTheme = key;
+    saveTheme({ theme_dark: key });
   };
 
   const save = async () => {
@@ -294,7 +305,7 @@ export default function Settings() {
 
       <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
         <h3 className="text-sm font-semibold">Tema tampilan</h3>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Pilih kombinasi warna UI.</p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Pilih kombinasi warna UI (berlaku untuk semua pengguna).</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           {PALETTES.map((p) => (
             <button
@@ -321,7 +332,7 @@ export default function Settings() {
       <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
         <h3 className="text-sm font-semibold">Tema gelap</h3>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Warna UI saat mode gelap aktif. Terpisah dari tema di atas (yang berlaku di mode terang).
+          Warna UI saat mode gelap aktif (berlaku untuk semua pengguna). Terpisah dari tema di atas (yang berlaku di mode terang).
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           {DARK_THEMES.map((p) => (

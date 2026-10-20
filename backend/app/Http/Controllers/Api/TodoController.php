@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Todo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class TodoController extends Controller
 {
@@ -45,7 +46,7 @@ class TodoController extends Controller
         $todo = Todo::create([
             'user_id' => auth()->id(),
             'title' => $data['title'],
-            'due_at' => $data['due_at'] ?? null,
+            'due_at' => isset($data['due_at']) ? $this->toAppTz($data['due_at']) : null,
             'priority' => $data['priority'] ?? 'sedang',
             'notes' => $data['notes'] ?? null,
         ]);
@@ -72,7 +73,7 @@ class TodoController extends Controller
             $todo->done = $data['done'];
         }
         if (array_key_exists('due_at', $data)) {
-            $todo->due_at = $data['due_at'];
+            $todo->due_at = $data['due_at'] === null ? null : $this->toAppTz($data['due_at']);
         }
         if (array_key_exists('priority', $data)) {
             $todo->priority = $data['priority'] ?: 'sedang';
@@ -83,6 +84,13 @@ class TodoController extends Controller
         $todo->save();
 
         return response()->json(['todo' => $this->serialize($todo)]);
+    }
+
+    // Client mengirim ISO ber-offset (mis. ...Z); cast datetime membaca nilai
+    // tersimpan sebagai config app.timezone, jadi konversi ke WITA dulu.
+    private function toAppTz(string $value): Carbon
+    {
+        return Carbon::parse($value)->setTimezone(config('app.timezone'));
     }
 
     public function destroy(string $id)

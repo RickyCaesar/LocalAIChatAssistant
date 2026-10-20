@@ -1,4 +1,5 @@
 import { mediaSrc } from './api.js';
+import { fmtWita } from './time.js';
 
 const TYPE_LABEL = {
   convert: 'Konversi MP3',
@@ -139,6 +140,7 @@ function TaskRow({ task, onCancel }) {
       {task.status === 'done' && task.duration != null && (
         <p className="mt-1 text-[0.7rem] text-slate-400 dark:text-slate-500">
           Waktu: {Math.floor(task.duration / 60) > 0 ? `${Math.floor(task.duration / 60)}m ` : ''}{task.duration % 60}s
+          {task.finished_at ? ` · selesai ${fmtWita(task.finished_at)} WITA` : ''}
         </p>
       )}
     </div>
