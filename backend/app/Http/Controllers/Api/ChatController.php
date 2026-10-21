@@ -16,6 +16,10 @@ use Illuminate\Support\Str;
 
 class ChatController extends Controller
 {
+    // Ditempel di pesan user terakhir agar model tidak mengikuti jawaban lama
+    // yang mengaku tidak punya akses file atau menyuruh buka folder.
+    private const RUNTIME_BRIEFING = "\n\n[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI] Kamu berjalan di MyAssistant dan punya tool terminal, file, serta execute_code. Abaikan jawaban lama yang mengatakan kamu tidak punya akses. Jangan menulis kode untuk dijalankan user, jangan menyuruh user membuka folder/File Explorer, dan jangan mengaku tidak bisa menyimpan file. Kerjakan sendiri sekarang. Simpan setiap berkas hasil ke /home/ROG/MyAssistant/backend/storage/app/private/hermes-output/ lalu balas dengan tepat satu baris MEDIA: <path> per berkas. Untuk notulen: gunakan transkrip/lampiran yang ada, susun Ringkasan, Poin Penting, Keputusan, dan Action Items, lalu buat DOCX (dan PDF bila diminta).";
+
     private function scrubMediaRefs(string $text): string
     {
         $text = preg_replace('/\[([^\]]*)\]\(\/api\/media\/\d+[^)]*\)/', '$1', $text) ?? $text;
@@ -106,7 +110,7 @@ class ChatController extends Controller
                 'mime' => explode('/', $mime, 2)[1] ?? 'png',
                 'size' => strlen($bytes),
                 'path' => $path,
-                'model' => Setting::get('ai_model', (string) env('AI_MODEL', 'hermes-agent')),
+                'model' => (string) env('AI_MODEL', 'hermes-agent'),
             ]);
 
             return '/api/media/'.$media->id;
@@ -206,7 +210,7 @@ class ChatController extends Controller
             'size' => strlen($bytes),
             'path' => $rel,
             'preview' => FilePreview::extract($real),
-            'model' => Setting::get('ai_model', (string) env('AI_MODEL', 'hermes-agent')),
+            'model' => (string) env('AI_MODEL', 'hermes-agent'),
         ]);
     }
 
@@ -224,7 +228,9 @@ class ChatController extends Controller
             ]);
 
             return response()->json([
-                'error' => 'The local AI server returned an error.',
+                'error' => $response->status() === 429
+                    ? 'Kuota model gratis sedang jenuh (rate limit). Hermes sudah mencoba model lain — coba lagi beberapa saat.'
+                    : 'The local AI server returned an error.',
                 'status' => $response->status(),
                 'detail' => $detail,
             ], 502);
@@ -308,7 +314,7 @@ class ChatController extends Controller
         ]);
 
         $url = rtrim((string) env('AI_API_URL', 'http://host.docker.internal:1234/v1/chat/completions'), '/');
-        $model = Setting::get('ai_model') ?: (string) env('AI_MODEL', 'hermes-agent');
+        $model = (string) env('AI_MODEL', 'hermes-agent');
 
         $messages = [
             [
@@ -343,6 +349,11 @@ class ChatController extends Controller
         ]);
         if (is_string($userContent) && trim($userContent) === '') {
             $userContent = '[...]';
+        }
+        if (is_array($userContent) && isset($userContent[0]['text'])) {
+            $userContent[0]['text'] = (string) $userContent[0]['text'].self::RUNTIME_BRIEFING;
+        } else {
+            $userContent = (string) $userContent.self::RUNTIME_BRIEFING;
         }
         $messages[] = ['role' => 'user', 'content' => $userContent];
 

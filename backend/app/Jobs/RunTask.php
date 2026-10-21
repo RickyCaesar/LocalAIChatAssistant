@@ -202,7 +202,7 @@ class RunTask implements ShouldQueue
         }
 
         $url = rtrim((string) env('AI_API_URL', 'http://host.docker.internal:1234/v1/chat/completions'), '/');
-        $model = Setting::get('ai_model') ?: (string) env('AI_MODEL', 'hermes-agent');
+        $model = (string) env('AI_MODEL', 'hermes-agent');
 
         $http = Http::timeout((int) Setting::get('ai_timeout', env('AI_TIMEOUT', 600)))
             ->acceptJson()->asJson()->withOptions(['stream' => true]);

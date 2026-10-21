@@ -19,7 +19,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
 - **Todo List**: prioritas (tinggi/sedang/rendah), catatan, edit inline, due date + jam, filter Semua/Aktif/Selesai.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang (mingguan/bulanan/tahunan), edit/hapus. Bisa juga dikendalikan dari chat.
-- **Pengaturan**: model AI, timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau) yang **berlaku untuk semua pengguna**.
+- **Pengaturan**: timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau) yang **berlaku untuk semua pengguna**. Model AI tidak diatur di sini: aplikasi selalu memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes.
 - **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent.
 - **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik — termasuk **kartu kuota/kredit Hermes**, Kelola Pengguna, Skill, Settings).
 
@@ -115,7 +115,7 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 | `AI_API_URL` | `http://host.docker.internal:8642/v1/chat/completions` | endpoint gateway Hermes |
 | `APP_TIMEZONE` | `Asia/Makassar` | zona waktu aplikasi (WITA, UTC+8); stempel waktu & konteks tanggal Hermes mengikuti ini |
 | `AI_API_KEY` | `change-me-local-dev` | kunci gateway |
-| `AI_MODEL` | `hermes-agent` | nama model |
+| `AI_MODEL` | `hermes-agent` | alias gateway; model asli (dan-feat-fit gratis) dipilih di Hermes, bukan di aplikasi |
 | `AI_TIMEOUT` | `600` | timeout request AI (detik), dapat ditimpa dari Settings |
 | `AI_TEMPERATURE` | `0.7` | suhu sampling |
 | `AI_SYSTEM_PROMPT` | — | instruksi sistem (termasuk cara mengirim berkas via baris `MEDIA:`) |
@@ -129,7 +129,7 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 
 ### Pengaturan dalam aplikasi (menu **Settings**, admin)
 
-Tersimpan di DB (model `Setting`): `ai_model`, `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`, `tts_enabled`, `tts_voice`, `tts_speed`, `theme_palette`, `theme_dark`. Tema berlaku global (disimpan admin); pilihan mode terang/gelap dan sakelar **Mode Suara** tetap per browser (`localStorage`).
+Tersimpan di DB (model `Setting`): `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`, `tts_enabled`, `tts_voice`, `tts_speed`, `theme_palette`, `theme_dark`. Tema berlaku global (disimpan admin); pilihan mode terang/gelap dan sakelar **Mode Suara** tetap per browser (`localStorage`).
 
 ## Integrasi dengan Hermes Agent
 
@@ -140,7 +140,39 @@ Backend berjalan di dalam container yang terisolasi, jadi memakai `host.docker.i
 HERMES_HOME=/home/ROG/.hermes hermes gateway
 ```
 
-Gateway yang dipakai aplikasi: `GET /v1/models` (daftar model) dan `POST /v1/chat/completions` (chat). Folder `/home/ROG` di-mount read-only ke container agar agent bisa membaca sumber lokal dan menulis berkas hasil ke `HERMES_OUTPUT_HOST`.
+Gateway yang dipakai aplikasi: `POST /v1/chat/completions` (chat, model selalu alias `hermes-agent`) dan `GET /health` (status). Folder `/home/ROG` di-mount read-only ke container agar agent bisa membaca sumber lokal dan menulis berkas hasil ke `HERMES_OUTPUT_HOST`.
+
+### Model gratis & rate limit
+
+Aplikasi **tidak pernah memilih model** — semua request memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes di `~/.hermes/config.yaml`. Setup gratis yang dipakai:
+
+```yaml
+model:
+  default: stepfun/step-3.7-flash:free      # SKU :free
+  provider: nous
+fallback_providers:                          # cadangan, dipakai otomatis saat model utama kena limit
+  - provider: nous
+    model: poolside/laguna-s-2.1:free
+  - provider: nous
+    model: upstage/solar-mini4:free
+  - provider: nous
+    model: ornith/ornith-1.5-122b:free
+  - provider: nous
+    model: reflection/beam-1.0-501b-a23b:free
+auxiliary:
+  free_only: true                           # fallback auxiliary ke model berbayar DITOLAK
+  title_generation:
+    enabled: false                          # judul sesi = turunan kalimat user, tanpa panggilan API
+```
+
+- **429 (fair-share free Nous habis)**: Hermes otomatis pindah ke model free berikutnya dan tetap menjawab. Kalau semua fallback ikut kena limit, chat gagal dengan pesan *"Kuota model gratis sedang jenuh (rate limit)…"* (`ChatController::respondBuffered`, `AIController::presentationDraft`). Tidak ada jalur ke model berbayar selama `auxiliary.free_only: true` aktif.
+- `auxiliary.title_generation.enabled: false` mematikan panggilan judul AI yang sebelumnya ikut kena 429 — judul sesi tetap ada (turunan kalimat user, instan). Kalau mau judul AI lagi, arahkan ke satu SKU `:free` (mis. `poolside/laguna-s-2.1:free`).
+- Cek konfigurasi aktif: `hermes config get fallback_providers`, `hermes config get auxiliary.title_generation.enabled`.
+- Daftar SKU `:free` yang tersedia berubah sewaktu-waktu; cek lewat `GET /v1/models` gateway (butuh bearer token).
+
+### Aturan yang ditempel ke pesan user
+
+Setiap pesan user dari app diberi satu blok `[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI]` (`ChatController::RUNTIME_BRIEFING`): pakai tool terminal/file, simpan berkas keluaran ke `storage/app/private/hermes-output/`, balas dengan tepat satu baris `MEDIA: <path>` per berkas. Tanpa blok ini agent cenderung menyebut "saya tidak punya akses file" dan menyuruh user membuka folder sendiri.
 
 ### Aksi dari chat (`ACTION:`)
 
@@ -237,7 +269,7 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 
 - **Auth:** `POST /api/register`, `POST /api/login`, `GET /api/me`, `PUT /api/profile` (nama/email/password sendiri), `POST /api/logout`
 - **Sessions:** `GET|POST /api/sessions`, `PUT|DELETE /api/sessions/{id}`
-- **Chat:** `POST /api/chat` (streaming SSE), `GET /api/models`
+- **Chat:** `POST /api/chat` (streaming SSE)
 - **Media:** `GET|POST /api/media`, `GET|DELETE /api/media/{id}` (pratinjau inline; `?download=1` untuk unduh), `POST /api/media/{id}/pdf` (konversi berkas ke PDF)
 - **Antrean (asinkron):** `GET /api/queue` (daftar tugas + progress/ETA/posisi), `GET /api/queue/{id}`, `DELETE /api/queue/{id}` (batalkan yang masih menunggu), `POST /api/queue/transcribe` (unggah audio), `POST /api/queue/convert` (unggah video → MP3), `POST /api/queue/notulensi` (`{source}`)
 - **Presentasi:** `POST /api/presentations` (Marp Markdown → PPTX, **asinkron**), `POST /api/presentations/draft` (AI menyusun draft Marp Markdown)
@@ -245,7 +277,7 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - **Suara (TTS/STT):** `GET /api/tts/voices` (daftar model suara), `POST /api/tts` (`{text, voice?, speed?}` → `audio/wav`), `POST /api/stt` (unggah audio → `{text, language}`, sinkron untuk Mode Suara)
 - **Todo:** `GET|POST /api/todos`, `PUT|DELETE /api/todos/{id}`
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
-- **Settings:** `GET /api/settings` (semua user), `POST /api/settings` & `POST /api/settings/model` (**admin**)
+- **Settings:** `GET /api/settings` (semua user), `POST /api/settings` (**admin**)
 - **Admin:** `GET /api/analytics`, `GET /api/skills`, `GET|POST /api/users`, `PUT|DELETE /api/users/{id}`
 
 ## Batasan Diketahui
@@ -272,4 +304,6 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
 - Pesan chat lama (sebelum ada cap waktu) tidak menampilkan jam — field `at` hanya ditulis untuk pesan baru; tidak di-backfill.
 - `POST /api/stt` (Mode Suara) sengaja **sinkron** karena jeda antrean (worker poll 3 dtk) terlalu lama untuk percakapan. Berkat 4 worker di atas, request lain tetap dilayani selama transkripsi; tapi tiap STT memakai 1 worker, jadi jangan menumpuk banyak sekaligus (sisa worker bisa habis dan lock SQLite menunggu `busy_timeout`). Dengan model `small` + `int8` klip pendek ≈ 5–10 dtk (panggilan pertama memuat model); dengan `large-v3` bisa > 1 menit — set `small`/`base` di Settings untuk voice mode.
 - Mode suara belum memakai VAD (deteksi keheningan): rekaman berhenti lewat klik atau batas 20 detik. Upgrade: `AnalyserNode` untuk memutus otomatis saat hening.
+- Kuota free Nous (fair-share) bisa habis di tengah percakapan → Hermes otomatis fallback ke model `:free` berikutnya; kalau semuanya kena limit, chat gagal sampai quota pulih (retry_after dari provider, biasanya puluhan menit). Tidak ada jalur berbayar: `auxiliary.free_only: true` menolak fallback OpenRouter non-`:free`.
+- Model AI tidak bisa diganti dari aplikasi (menu Settings) — hanya lewat konfigurasi Hermes. Aplikasi selalu mengirim alias `hermes-agent`.
 - TTS memakai Piper (CPU) dengan panjang teks maks 4000 karakter per permintaan; cache WAV disimpan 24 jam di `storage/app/private/tts`.

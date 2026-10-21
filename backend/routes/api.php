@@ -54,8 +54,6 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'read']);
 
-    Route::get('/models', [AIController::class, 'models']);
-
     Route::get('/todos', [TodoController::class, 'index']);
     Route::post('/todos', [TodoController::class, 'store']);
     Route::put('/todos/{id}', [TodoController::class, 'update']);
@@ -74,7 +72,6 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
         Route::put('/users/{id}', [UserController::class, 'update']);
         Route::delete('/users/{id}', [UserController::class, 'destroy']);
         Route::post('/settings', [AIController::class, 'updateSettings']);
-        Route::post('/settings/model', [AIController::class, 'updateModel']);
     });
     // GET tetap terbuka: semua user membacanya untuk preferensi TTS + tema global.
     Route::get('/settings', [AIController::class, 'settings']);

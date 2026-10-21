@@ -42,7 +42,7 @@ class AIController extends Controller
     // ke portal. ponytail: pisah ke bridge/host helper kalau auth.json dipindah/di-rename.
     private function hermesUsage(): array
     {
-        $model = Setting::get('ai_model', (string) env('AI_MODEL', 'hermes-agent'));
+        $model = (string) env('AI_MODEL', 'hermes-agent');
 
         return Cache::remember('hermes.usage', 60, function () use ($model) {
             $file = (string) env('HERMES_AUTH_FILE', '/home/ROG/.hermes/auth.json');
@@ -86,45 +86,6 @@ class AIController extends Controller
         });
     }
 
-    public function models()
-    {
-        $raw = null;
-        $error = null;
-
-        try {
-            $res = static::http()->get(static::baseUrl().'/models');
-            $raw = $res->successful() ? $res->json('data') : null;
-            $error = $res->successful() ? null : ($res->json('error') ?? $res->body());
-        } catch (\Throwable $e) {
-            $error = $e->getMessage();
-        }
-
-        if ($raw === null) {
-            return response()->json([
-                'error' => $error ?? 'Unable to fetch models from the local AI.',
-                'models' => [],
-            ], 502);
-        }
-
-        $models = collect($raw)
-            ->map(fn ($m) => [
-                'id' => (string) ($m['id'] ?? $m['name'] ?? ''),
-                'owned_by' => (string) ($m['owned_by'] ?? ''),
-                'free' => (bool) preg_match('/free/i', ($m['id'] ?? '').' '.($m['owned_by'] ?? '')),
-            ])
-            ->filter(fn ($m) => $m['id'] !== '')
-            ->values();
-
-        $free = $models->filter(fn ($m) => $m['free'])->values();
-
-        return response()->json([
-            'models' => $free->count() > 0 ? $free : $models,
-            'current' => Setting::get('ai_model', (string) env('AI_MODEL', 'hermes-agent')),
-            'free_only' => $free->count() > 0,
-            'total_available' => $models->count(),
-        ]);
-    }
-
     // Draft Marp Markdown dari deskripsi user lewat Hermes; hasilnya dikembalikan
     // agar user bisa mengedit dulu sebelum dibuat PPTX. ponytail: panggilan
     // non-stream, tekanan presentasi biasanya kecil.
@@ -135,7 +96,7 @@ class AIController extends Controller
             'material' => 'nullable|string|max:60000',
         ]);
 
-        $model = Setting::get('ai_model') ?: (string) env('AI_MODEL', 'hermes-agent');
+        $model = (string) env('AI_MODEL', 'hermes-agent');
         $system = 'You design modern, visually rich slide decks as Marp Markdown. '
             .'Do NOT use tools and do NOT save files — reply with the Markdown text as your entire message, no explanations, no code fences. '
             ."Begin with YAML frontmatter:\n---\nmarp: true\ntheme: notebook\npaginate: true\n---\n"
@@ -172,7 +133,9 @@ class AIController extends Controller
 
         if ($res->failed()) {
             return response()->json([
-                'error' => 'Hermes mengembalikan error.',
+                'error' => $res->status() === 429
+                    ? 'Kuota model gratis sedang jenuh (rate limit). Hermes sudah mencoba model lain — coba lagi beberapa saat.'
+                    : 'Hermes mengembalikan error.',
                 'detail' => $res->json('error.message') ?? $res->body(),
             ], 502);
         }
@@ -330,7 +293,7 @@ class AIController extends Controller
     public function settings()
     {
         return response()->json([
-            'model' => Setting::get('ai_model', (string) env('AI_MODEL', 'hermes-agent')),
+            'model' => (string) env('AI_MODEL', 'hermes-agent'),
             'ai_timeout' => (int) Setting::get('ai_timeout', env('AI_TIMEOUT', 600)),
             'max_upload_mb' => (int) Setting::get('max_upload_mb', 20),
             'stt_model' => (string) Setting::get('stt_model', 'small'),
@@ -368,13 +331,5 @@ class AIController extends Controller
         }
 
         return response()->json(['saved' => true] + $data);
-    }
-
-    public function updateModel(Request $request)
-    {
-        $data = $request->validate(['model' => 'required|string|max:190']);
-        Setting::set('ai_model', $data['model']);
-
-        return response()->json(['model' => $data['model'], 'saved' => true]);
     }
 }

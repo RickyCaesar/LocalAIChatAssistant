@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use App\Models\Media;
-use App\Models\Setting;
 use Illuminate\Support\Str;
 
 // Membuat spreadsheet XLSX dari struktur JSON yang dikirim agent lewat
@@ -47,7 +46,7 @@ class DocumentBuilder
             'size' => strlen($bytes),
             'path' => $rel,
             'preview' => FilePreview::extract($full),
-            'model' => Setting::get('ai_model', (string) env('AI_MODEL', 'hermes-agent')),
+            'model' => (string) env('AI_MODEL', 'hermes-agent'),
         ]);
     }
 

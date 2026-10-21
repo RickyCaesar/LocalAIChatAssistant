@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, API_URL } from './api.js';
+import { api } from './api.js';
 import { speak, stopSpeech } from './speech.js';
 
 const PALETTES = [
@@ -15,14 +15,7 @@ const DARK_THEMES = [
 ];
 
 export default function Settings() {
-  const [models, setModels] = useState([]);
-  const [current, setCurrent] = useState('');
-  const [selected, setSelected] = useState('');
   const [hermesStatus, setHermesStatus] = useState('unknown');
-  const [freeOnly, setFreeOnly] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
   const [timeoutSec, setTimeoutSec] = useState(600);
   const [maxMb, setMaxMb] = useState(20);
@@ -41,16 +34,11 @@ export default function Settings() {
   useEffect(() => {
     (async () => {
       try {
-        const [models, settings, ttsVoices] = await Promise.all([
-          api('/api/models'),
+        const [settings, ttsVoices] = await Promise.all([
           api('/api/settings'),
           api('/api/tts/voices').catch(() => ({ voices: [] })),
         ]);
 
-        setModels(models.models);
-        setFreeOnly(models.free_only);
-        setCurrent(models.current);
-        setSelected(models.current || (models.models[0] && models.models[0].id) || '');
         setHermesStatus(settings.hermes_status || 'unknown');
         if (settings.ai_timeout) setTimeoutSec(settings.ai_timeout);
         if (settings.max_upload_mb) {
@@ -67,8 +55,6 @@ export default function Settings() {
         if (settings.theme_dark) setDarkTheme(settings.theme_dark);
       } catch (e) {
         setError(e.message);
-      } finally {
-        setLoading(false);
       }
     })();
   }, []);
@@ -138,25 +124,6 @@ export default function Settings() {
     setDarkTheme(key);
     document.documentElement.dataset.darkTheme = key;
     saveTheme({ theme_dark: key });
-  };
-
-  const save = async () => {
-    if (!selected) return;
-    setSaving(true);
-    setMessage(null);
-    setError(null);
-    try {
-      const data = await api('/api/settings/model', {
-        method: 'POST',
-        body: JSON.stringify({ model: selected }),
-      });
-      setCurrent(data.model);
-      setMessage(`Model aktif: ${data.model}`);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
-    }
   };
 
   return (
@@ -357,57 +324,6 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
-        <h3 className="text-sm font-semibold">Model AI aktif</h3>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Daftar model diambil langsung dari Hermes Agent ({API_URL}/api/models). Menggunakan model dengan lencana{' '}
-          <span className="font-medium text-emerald-600 dark:text-emerald-400">Free</span>
-          {freeOnly ? '.' : ' — tidak ada model dengan lencana Free yang terdeteksi, menampilkan semua.'}
-        </p>
-
-        {loading ? (
-          <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Loading models...</p>
-        ) : models.length === 0 ? (
-          <p className="mt-4 text-sm text-red-500">Tidak ada model yang ditemukan. Pastikan Hermes gateway aktif.</p>
-        ) : (
-          <div className="mt-4">
-            <label htmlFor="model-select" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
-              Pilih model
-            </label>
-            <select
-              id="model-select"
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.id}
-                  {m.free ? ' (Free)' : ''}
-                </option>
-              ))}
-            </select>
-
-            <div className="mt-3">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Model aktif sekarang:{' '}
-                <span className="font-mono text-slate-700 dark:text-slate-200">{current || '—'}</span>
-              </p>
-              <button
-                type="button"
-                onClick={save}
-                disabled={saving || !selected || selected === current}
-                className="mt-3 rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100"
-              >
-                {saving ? 'Menyimpan...' : selected === current ? 'Model aktif' : 'Simpan model'}
-              </button>
-            </div>
-
-            {message && <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">{message}</p>}
-            {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
