@@ -15,6 +15,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Antrean proses (menu Antrean)**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, posisi dalam antrean, dan **jam selesai (WITA)**. Indikator ringkas tampil di header dari menu mana pun, dan progres tetap berjalan saat berpindah menu.
 - **Notifikasi**: lonceng di header dengan lencana belum dibaca, toast di kanan atas saat tugas antrean selesai/gagal, dan **notifikasi browser (OS)** opsional saat tab tidak aktif. Tersimpan per akun dan bisa ditandai dibaca.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — mis. tabel penugasan reviewer atau daftar tata tertib acara — lalu mengirimnya ke chat/Gallery.
+- **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen sesuai pola Dinas Pendidikan Kaltim (kop, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan) — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery.
 - **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
 - **Todo List**: prioritas (tinggi/sedang/rendah), catatan, edit inline, due date + jam, filter Semua/Aktif/Selesai.
@@ -116,14 +117,14 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 | `APP_TIMEZONE` | `Asia/Makassar` | zona waktu aplikasi (WITA, UTC+8); stempel waktu & konteks tanggal Hermes mengikuti ini |
 | `AI_API_KEY` | `change-me-local-dev` | kunci gateway |
 | `AI_MODEL` | `hermes-agent` | alias gateway; model asli (dan-feat-fit gratis) dipilih di Hermes, bukan di aplikasi |
-| `AI_TIMEOUT` | `600` | timeout request AI (detik), dapat ditimpa dari Settings |
+| `AI_TIMEOUT` | `600` | timeout request AI (detik); dapat ditimpa dari Settings dan admin bebas menentukan batasnya |
 | `AI_TEMPERATURE` | `0.7` | suhu sampling |
 | `AI_SYSTEM_PROMPT` | — | instruksi sistem (termasuk cara mengirim berkas via baris `MEDIA:`) |
 | `HERMES_OUTPUT_HOST` | `.../storage/app/private` | folder keluaran berkas agent |
 | `HERMES_AUTH_FILE` | `/home/ROG/.hermes/auth.json` | (opsional) berkas kredensial Hermes; dipakai kartu kuota/kredit di Dashboard |
 | `CORS_ALLOWED_ORIGINS` | `*` | origin yang diizinkan |
 | `QUEUE_CONNECTION` | `database` | driver antrean; proses berat dijalankan oleh `queue-worker` |
-| `DB_QUEUE_RETRY_AFTER` | `3660` | kapan job boleh di-retry; **harus > `--timeout` worker** (3600) |
+| `DB_QUEUE_RETRY_AFTER` | `3660` | kapan job yang macet dianggap hilang dan boleh di-retry; dengan satu worker cukup, tapi naikkan bila menambah worker dan `ai_timeout` > 3600 |
 | `TTS_ENGINE` | `piper` | mesin TTS lokal (saat ini hanya `piper`) |
 | `TTS_MODEL_PATH` | `/app/storage/app/tts_models` | folder model suara tambahan (opsional; model bawaan ada di `/opt/tts/voices` dalam image) |
 
@@ -181,6 +182,7 @@ Selain mengirim berkas lewat baris `MEDIA:`, agent dapat memicu aksi berikut dar
 - `ACTION: TODO_ADD <judul>`, `TODO_DONE <judul|#id>`, `TODO_DEL <judul|#id>`
 - `ACTION: EVENT_ADD <YYYY-MM-DD HH:MM> | <judul>`, `EVENT_DEL <#id>`
 - `ACTION: DOC_BUILD <JSON satu baris>` — menyusun XLSX lalu mengirimnya ke chat/Gallery.
+- `ACTION: NOTULEN_BUILD <JSON satu baris>` — menyusun **DOCX notulen rapat** (pola Dinas Pendidikan Kaltim) lalu mengirimnya ke chat/Gallery. Tidak perlu menulis skrip sendiri lagi.
 
 Waktu dan tanggal relatif (`besok`, `lusa`, `minggu depan`) dihitung dari konteks waktu sekarang yang selalu disisipkan ke model: `WAKTU SEKARANG (WITA/Asia/Makassar, UTC+8): <tanggal> <jam>, hari ini ..., besok ...`. Semua jadwal yang dibuat `EVENT_ADD` disimpan dan ditampilkan dalam **WITA**.
 
@@ -200,6 +202,31 @@ Skema JSON `DOC_BUILD` (dijelaskan ke model lewat `ActionRunner::toolsInstructio
 ```
 
 Tiap blok boleh punya `heading`, `columns` (baris header tebal), dan `rows`; `columns`/`rows` juga boleh di level atas (dianggap satu blok). Berkas disimpan ke penyimpanan media dan otomatis muncul di **Gallery**.
+
+Skema JSON `NOTULEN_BUILD` (pola notulen Dinas Pendidikan dan Kebudayaan Provinsi Kalimantan Timur — kop, judul, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan):
+
+```json
+{
+  "filename": "Notulen_Rapat_BOSP.docx",
+  "judul": "NOTULENSI RAPAT",
+  "subjudul": "Rapat Koordinasi Pengelola Dana BOSP",
+  "identitas": {"Hari/Tanggal": "Selasa, 20 Oktober 2026", "Tempat": "Daring via Zoom",
+                "Moderator": "Bapak Sekretaris", "Peserta": "Kepala Bidang Teknis, KPA, PPT"},
+  "ringkasan": ["Rapat membahas pengelolaan Dana BOSP tahun anggaran 2027."],
+  "agenda": ["Pembukaan dan kehadiran peserta"],
+  "pembahasan": [{"judul": "A. Komponen Satuan Biaya per Siswa per Tahun",
+                   "paragraf": ["Angka satuan biaya sementara Rp3.500.000 per siswa per tahun."],
+                   "poin": ["Kebutuhan Belajar", "Operasional Sekolah"]}],
+  "tanya_jawab": ["Tidak ada pertanyaan dan jawaban tercatat dalam rekaman."],
+  "keputusan": ["Target penyerapan ditetapkan minimal 4% setiap minggu."],
+  "action_items": [["Penanggung Jawab", "Tindakan"], ["Kasubbag Perencanaan", "Membuat kertas kerja."]],
+  "penutup": ["Demikian notulensi ini disusun berdasarkan rekaman rapat."],
+  "penanda_tangan": [["Pimpinan Kegiatan", "Bapak Sekretaris"], ["Notulen", "Kasubbag Perencanaan"]],
+  "catatan": ["Sumber: rekaman rapat 20 Oktober 2026."]
+}
+```
+
+Semua kunci opsional: yang tidak diisi dilewati, dan kop instansi dipakai otomatis kalau `kepala` tidak diberikan. Penulis DOCX (`App\Support\NotulenBuilder`) memakai `ZipArchive` seperti `DocumentBuilder` — tanpa gambar, header/footer, dan penomoran halaman (kalau perlu, ganti ke `phpoffice/phpword`).
 
 ## Notifikasi
 
@@ -243,12 +270,14 @@ backend/            Laravel API
   app/Providers/AppServiceProvider.php  pragma SQLite (busy_timeout, journal mode)
   app/Support/                FilePreview (ekstraksi teks/OCR), ActionRunner (aksi dari chat),
                               DocumentBuilder (penulis XLSX minimal untuk DOC_BUILD),
+                              NotulenBuilder (penulis DOCX notulen untuk NOTULEN_BUILD),
                               MarpGenerator (Marp Markdown → PPTX via marp-cli + Chromium),
                               NotificationService (notifikasi in-app dari task antrean)
   resources/marp/notebook.css tema Marp (variabel warna di-inject dari pilihan tema)
   stt/transcribe.py           skrip faster-whisper (memancarkan progres)
   stt/toaudio.py              ekstrak audio → MP3 via PyAV (memancarkan progres)
   tests/document_builder_check.php  self-check penulis XLSX (php, tanpa framework)
+  tests/notulen_builder_check.php  self-check penulis DOCX notulen (php, tanpa framework)
   tests/eta_check.php         self-check rumus ETA (php, tanpa framework)
   tests/profile_check.php     self-check endpoint profil + proteksi settings (php, butuh DB)
   tests/timezone_check.php    self-check WITA: konteks Hermes, "besok", konversi ISO client (php, butuh DB)

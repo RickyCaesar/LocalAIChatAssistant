@@ -23,7 +23,7 @@ class RunTask implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 3600;
+    public int $timeout = 3660;
 
     // ponytail: tanpa retry - mengulang STT/konversi hanya membuang menit CPU
     // dan berkas sumber sudah dihapus setelah percobaan pertama.
@@ -32,7 +32,12 @@ class RunTask implements ShouldQueue
     private const NOTULENSI_PROMPT =
         'Kamu adalah notulis rapat profesional. Dari transkrip/catatan berikut, buat notulensi rapi dalam bahasa Indonesia dengan bagian: Ringkasan, Poin Penting, Keputusan, dan Action Items. Jangan mengarang di luar isi.';
 
-    public function __construct(public int $taskId) {}
+    public function __construct(public int $taskId)
+    {
+        // Ikuti batas yang diatur admin; +60 detik agar Process/HTTP timeout
+        // menang lebih dulu dan task dapat pesan error yang jelas.
+        $this->timeout = 60 + max(60, (int) Setting::get('ai_timeout', 3600));
+    }
 
     public function handle(): void
     {

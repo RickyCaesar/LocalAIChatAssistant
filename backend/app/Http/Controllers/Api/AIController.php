@@ -311,7 +311,7 @@ class AIController extends Controller
     public function updateSettings(Request $request)
     {
         $data = $request->validate([
-            'ai_timeout' => 'sometimes|integer|min:5|max:3600',
+            'ai_timeout' => 'sometimes|integer|min:5',
             'max_upload_mb' => 'sometimes|integer|min:1',
             'stt_model' => 'sometimes|string|in:tiny,base,small,medium,large-v3',
             'stt_language' => 'sometimes|string|max:10',

@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Event;
 use App\Models\Todo;
 use App\Support\MarpGenerator;
+use App\Support\NotulenBuilder;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
 // Menjalankan ACTION: <...> yang dikeluarkan model Hermes di dalam balasannya.
@@ -30,6 +31,7 @@ class ActionRunner
                     'EVENT_ADD' => self::eventAdd($userId, $arg),
                     'EVENT_DEL' => self::eventDel($userId, $arg),
                     'DOC_BUILD' => self::docBuild($userId, $arg, $sessionId),
+                    'NOTULEN_BUILD' => self::notulenBuild($userId, $arg, $sessionId),
                     'GENERATE_PPTX' => self::generatePptx($userId, $arg, $sessionId),
                     default => '✖ Perintah tidak dikenal: '.$cmd,
                 };
@@ -83,6 +85,7 @@ class ActionRunner
             ."ACTION: EVENT_ADD <YYYY-MM-DD HH:MM> | <title>\n"
             ."ACTION: EVENT_DEL <#id>\n"
             ."ACTION: DOC_BUILD <single-line JSON> — build an XLSX spreadsheet and send it to the chat/Gallery. Schema: {\"filename\":\"name.xlsx\",\"sheet\":\"Sheet\",\"title\":\"Report title\",\"blocks\":[{\"heading\":\"Section\",\"columns\":[\"Col A\",\"Col B\"],\"rows\":[[\"a1\",\"b1\"],[\"a2\",\"b2\"]]}]}. Use multiple blocks for several titled tables/lists.\n"
+            ."ACTION: NOTULEN_BUILD <single-line JSON> — build a DOCX notulen rapat (pola Dinas Pendidikan Kaltim: kop, judul, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup) and send it to the chat/Gallery. Schema: {\"filename\":\"Notulen.docx\",\"judul\":\"NOTULENSI RAPAT\",\"subjudul\":\"Rapat Koordinasi BOSP\",\"identitas\":{\"Hari/Tanggal\":\"Selasa, 20 Oktober 2026\",\"Waktu\":\"09.00 WITA\",\"Tempat\":\"Daring via Zoom\",\"Moderator\":\"...\",\"Peserta\":\"...\"},\"ringkasan\":[\"...\"],\"agenda\":[\"...\"],\"pembahasan\":[{\"judul\":\"A. ...\",\"paragraf\":[\"...\"],\"poin\":[\"...\"]}],\"tanya_jawab\":[\"...\"],\"keputusan\":[\"...\"],\"action_items\":[[\"Penanggung Jawab\",\"Tindakan\"],[\"Tim A\",\"Melakukan ...\"]],\"penutup\":[\"...\"],\"penanda_tangan\":[[\"Pimpinan Kegiatan\",\"...\"],[\"Notulen\",\"...\"]],\"catatan\":[\"...\"]}. Use this instead of writing your own DOCX script.\n"
             ."ACTION: GENERATE_PPTX\n"
             ."<Marp Markdown — use --- to separate slides, frontmatter like `---\ntheme: default\nclass: invert\n---` to switch themes/dark mode. Include slide titles and brief bullets based on the user's request. The entire Marp content goes after this line on the next lines.> Emit the ACTION line and the Markdown immediately after it.";
     }
@@ -213,6 +216,22 @@ class ActionRunner
         }
 
         return '✔ Dokumen dibuat: ['.$media->filename.'](/api/media/'.$media->id.')';
+    }
+
+    private static function notulenBuild(int $userId, string $arg, ?int $sessionId): string
+    {
+        $doc = json_decode($arg, true);
+        if (! is_array($doc)) {
+            return '✖ NOTULEN_BUILD butuh JSON valid dalam satu baris.';
+        }
+
+        try {
+            $media = NotulenBuilder::save($doc, $userId, $sessionId);
+        } catch (\Throwable $e) {
+            return '✖ Gagal membuat notulen: '.$e->getMessage();
+        }
+
+        return '✔ Notulen dibuat: ['.$media->filename.'](/api/media/'.$media->id.')';
     }
 
     private static function stripActions(string $text): string

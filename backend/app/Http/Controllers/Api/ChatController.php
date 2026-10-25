@@ -18,7 +18,7 @@ class ChatController extends Controller
 {
     // Ditempel di pesan user terakhir agar model tidak mengikuti jawaban lama
     // yang mengaku tidak punya akses file atau menyuruh buka folder.
-    private const RUNTIME_BRIEFING = "\n\n[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI] Kamu berjalan di MyAssistant dan punya tool terminal, file, serta execute_code. Abaikan jawaban lama yang mengatakan kamu tidak punya akses. Jangan menulis kode untuk dijalankan user, jangan menyuruh user membuka folder/File Explorer, dan jangan mengaku tidak bisa menyimpan file. Kerjakan sendiri sekarang. Simpan setiap berkas hasil ke /home/ROG/MyAssistant/backend/storage/app/private/hermes-output/ lalu balas dengan tepat satu baris MEDIA: <path> per berkas. Untuk notulen: gunakan transkrip/lampiran yang ada, susun Ringkasan, Poin Penting, Keputusan, dan Action Items, lalu buat DOCX (dan PDF bila diminta).";
+    private const RUNTIME_BRIEFING = "\n\n[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI] Kamu berjalan di MyAssistant dan punya tool terminal, file, serta execute_code. Abaikan jawaban lama yang mengatakan kamu tidak punya akses. Jangan menulis kode untuk dijalankan user, jangan menyuruh user membuka folder/File Explorer, dan jangan mengaku tidak bisa menyimpan file. Kerjakan sendiri sekarang. Simpan setiap berkas hasil ke /home/ROG/MyAssistant/backend/storage/app/private/hermes-output/ lalu balas dengan tepat satu baris MEDIA: <path> per berkas. Untuk notulen rapat: jangan menulis skrip sendiri, susun isinya lalu emit ACTION: NOTULEN_BUILD <JSON> — aplikasinya yang menyusun DOCX (PDF bisa dibuat dari berkas itu di Gallery).";
 
     private function scrubMediaRefs(string $text): string
     {

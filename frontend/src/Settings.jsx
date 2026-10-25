@@ -156,7 +156,6 @@ export default function Settings() {
               id="timeout"
               type="number"
               min={5}
-              max={3600}
               value={timeoutSec}
               onChange={(e) => setTimeoutSec(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
