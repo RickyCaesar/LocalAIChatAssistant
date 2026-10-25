@@ -93,14 +93,16 @@ class RunTask implements ShouldQueue
             mkdir(dirname($dest), 0775, true);
         }
 
-        $this->runWithProgress($task, [
-            (string) env('STT_PYTHON', '/opt/stt/bin/python'),
-            base_path('stt/toaudio.py'),
-            '--file', $src,
-            '--out', $dest,
-        ], 300);
-
-        @unlink($src);
+        try {
+            $this->runWithProgress($task, [
+                (string) env('STT_PYTHON', '/opt/stt/bin/python'),
+                base_path('stt/toaudio.py'),
+                '--file', $src,
+                '--out', $dest,
+            ], 300);
+        } finally {
+            @unlink($src);
+        }
 
         if (! is_file($dest) || filesize($dest) === 0) {
             @unlink($dest);
@@ -140,15 +142,17 @@ class RunTask implements ShouldQueue
             throw new \RuntimeException('Berkas audio tidak ditemukan.');
         }
 
-        $result = $this->runWithProgress($task, [
-            (string) env('STT_PYTHON', '/opt/stt/bin/python'),
-            base_path('stt/transcribe.py'),
-            '--file', $audio,
-            '--model', (string) ($task->payload['model'] ?? Setting::get('stt_model', 'small')),
-            '--language', (string) ($task->payload['language'] ?? Setting::get('stt_language', 'id')),
-        ], (int) Setting::get('ai_timeout', 3600));
-
-        @unlink($audio);
+        try {
+            $result = $this->runWithProgress($task, [
+                (string) env('STT_PYTHON', '/opt/stt/bin/python'),
+                base_path('stt/transcribe.py'),
+                '--file', $audio,
+                '--model', (string) ($task->payload['model'] ?? Setting::get('stt_model', 'small')),
+                '--language', (string) ($task->payload['language'] ?? Setting::get('stt_language', 'id')),
+            ], (int) Setting::get('ai_timeout', 3600));
+        } finally {
+            @unlink($audio);
+        }
 
         if (! $result->successful()) {
             throw new \RuntimeException(trim($result->errorOutput()) ?: 'Transkripsi gagal.');

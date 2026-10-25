@@ -5,24 +5,23 @@
 #   tools/topdf.sh <input-host-path> [out-host-dir]
 set -euo pipefail
 
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+storage="$root/backend/storage/app"
 in="${1:?usage: topdf.sh <input-path> [out-dir]}"
-out="${2:-/home/ROG/MyAssistant/backend/storage/app/private/hermes-output}"
+out="${2:-$storage/private/hermes-output}"
 
 case "$in" in
-  /home/ROG/*) ;;
-  *) echo "input harus di bawah /home/ROG (agar terlihat oleh container)" >&2; exit 1 ;;
+  "$storage"/*) cin="/app/storage/app/${in#"$storage"/}" ;;
+  *) echo "input harus di bawah $storage" >&2; exit 1 ;;
 esac
-
-# Container punya /home/ROG (ro) dan volume storage di /app/storage/app,
-# jadi petakan folder keluaran ke path dalam container.
-storage="/home/ROG/MyAssistant/backend/storage/app"
 case "$out" in
   "$storage"/*) cout="/app/storage/app/${out#"$storage"/}" ;;
-  *) cout="$out" ;;
+  *) echo "out harus di bawah $storage" >&2; exit 1 ;;
 esac
 
+mkdir -p "$out"
 docker exec ai-chat-backend soffice --headless --norestore \
   -env:UserInstallation=file:///tmp/lo-convert \
-  --convert-to pdf --outdir "$cout" "$in" >/dev/null
+  --convert-to pdf --outdir "$cout" "$cin" >/dev/null
 
 echo "$out/$(basename "${in%.*}").pdf"

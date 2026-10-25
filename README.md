@@ -49,10 +49,11 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
    ```bash
    cp backend/.env.example backend/.env
+   touch backend/database.sqlite   # bind-mount SQLite: tanpa file, Docker membuat folder
    docker compose run --rm backend php artisan key:generate --show   # salin hasilnya ke APP_KEY
    ```
 
-2. **Sesuaikan path**: nilai `/home/ROG/MyAssistant` di `backend/.env` dan `tools/topdf.sh` harus menunjuk ke lokasi repo Anda. `docker-compose.yml` me-mount `$HOME`, jadi letakkan repo di dalam home directory.
+2. **Sesuaikan path**: nilai `/home/ROG/MyAssistant` di `AI_SYSTEM_PROMPT` dan `HERMES_OUTPUT_HOST` (`backend/.env`) harus menunjuk ke lokasi repo Anda. `tools/topdf.sh` mengikuti lokasi repo otomatis. `docker-compose.yml` me-mount `backend/storage/app`, `backend/.env`, dan SQLite; dari home hanya `$HOME/.hermes` (read-only).
 
 3. Jalankan dari folder root proyek:
 
@@ -120,7 +121,7 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 | `AI_TIMEOUT` | `600` | timeout request AI (detik); dapat ditimpa dari Settings dan admin bebas menentukan batasnya |
 | `AI_TEMPERATURE` | `0.7` | suhu sampling |
 | `AI_SYSTEM_PROMPT` | — | instruksi sistem (termasuk cara mengirim berkas via baris `MEDIA:`) |
-| `HERMES_OUTPUT_HOST` | `.../storage/app/private` | folder keluaran berkas agent |
+| `HERMES_OUTPUT_HOST` | `.../storage/app/private/hermes-output` | folder keluaran berkas agent; hanya folder ini yang diimpor |
 | `HERMES_AUTH_FILE` | `/home/ROG/.hermes/auth.json` | (opsional) berkas kredensial Hermes; dipakai kartu kuota/kredit di Dashboard |
 | `CORS_ALLOWED_ORIGINS` | `*` | origin yang diizinkan |
 | `QUEUE_CONNECTION` | `database` | driver antrean; proses berat dijalankan oleh `queue-worker` |
@@ -141,7 +142,7 @@ Backend berjalan di dalam container yang terisolasi, jadi memakai `host.docker.i
 HERMES_HOME=/home/ROG/.hermes hermes gateway
 ```
 
-Gateway yang dipakai aplikasi: `POST /v1/chat/completions` (chat, model selalu alias `hermes-agent`) dan `GET /health` (status). Folder `/home/ROG` di-mount read-only ke container agar agent bisa membaca sumber lokal dan menulis berkas hasil ke `HERMES_OUTPUT_HOST`.
+Gateway yang dipakai aplikasi: `POST /v1/chat/completions` (chat, model selalu alias `hermes-agent`) dan `GET /health` (status). Container me-mount `backend/storage/app` (baca-tulis, termasuk folder output `HERMES_OUTPUT_HOST`), `backend/.env`, SQLite, dan `~/.hermes` (read-only); agent tidak lagi mendapat seluruh home directory. Sumber lokal yang ingin diolah harus diunggah lewat aplikasi atau disalin ke folder output.
 
 ### Model gratis & rate limit
 
@@ -173,7 +174,7 @@ auxiliary:
 
 ### Aturan yang ditempel ke pesan user
 
-Setiap pesan user dari app diberi satu blok `[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI]` (`ChatController::RUNTIME_BRIEFING`): pakai tool terminal/file, simpan berkas keluaran ke `storage/app/private/hermes-output/`, balas dengan tepat satu baris `MEDIA: <path>` per berkas. Tanpa blok ini agent cenderung menyebut "saya tidak punya akses file" dan menyuruh user membuka folder sendiri.
+Setiap pesan user dari app diberi satu blok `[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI]` (`ChatController::runtimeBriefing()`): pakai tool terminal/file, simpan berkas keluaran ke `HERMES_OUTPUT_HOST`, balas dengan tepat satu baris `MEDIA: <path>` per berkas. Tanpa blok ini agent cenderung menyebut "saya tidak punya akses file" dan menyuruh user membuka folder sendiri.
 
 ### Aksi dari chat (`ACTION:`)
 
@@ -183,6 +184,7 @@ Selain mengirim berkas lewat baris `MEDIA:`, agent dapat memicu aksi berikut dar
 - `ACTION: EVENT_ADD <YYYY-MM-DD HH:MM> | <judul>`, `EVENT_DEL <#id>`
 - `ACTION: DOC_BUILD <JSON satu baris>` — menyusun XLSX lalu mengirimnya ke chat/Gallery.
 - `ACTION: NOTULEN_BUILD <JSON satu baris>` — menyusun **DOCX notulen rapat** (pola Dinas Pendidikan Kaltim) lalu mengirimnya ke chat/Gallery. Tidak perlu menulis skrip sendiri lagi.
+- `ACTION: GENERATE_PPTX` diikuti blok kode berpagar `marp` — merender Marp Markdown menjadi PPTX. Untuk presentasi yang disunting dulu, gunakan halaman **Presentasi**.
 
 Waktu dan tanggal relatif (`besok`, `lusa`, `minggu depan`) dihitung dari konteks waktu sekarang yang selalu disisipkan ke model: `WAKTU SEKARANG (WITA/Asia/Makassar, UTC+8): <tanggal> <jam>, hari ini ..., besok ...`. Semua jadwal yang dibuat `EVENT_ADD` disimpan dan ditampilkan dalam **WITA**.
 
@@ -252,8 +254,8 @@ Perekaman mikrofon butuh **secure context**: `localhost` atau HTTPS — dari HP 
 
 ## Akun & Peran
 
-- Registrasi & login terbuka melalui `/api/register` dan `/api/login`.
-- Autentikasi memakai **Bearer token** (disimpan di `localStorage` frontend); URL media membawa token via query `?auth=` karena `<img>`/`<iframe>` tidak bisa mengirim header.
+- Registrasi publik hanya untuk akun pertama (otomatis menjadi **admin**); setelah itu `/api/register` ditutup dan admin menambah akun lewat menu **Pengguna**. Login tetap terbuka di `/api/login`.
+- Autentikasi memakai **Bearer token** (disimpan di `localStorage` frontend); hanya URL `/api/media/` yang membawa token via query `?auth=` karena `<img>`/`<iframe>` tidak bisa mengirim header. URL eksternal tidak diberi token.
 - **Admin** (kolom `is_admin`) mendapat menu tambahan: Dashboard, Pengguna, Skill, Settings.
 - **Menu profil** (foto/initial di header) membuka **Pengaturan akun** (ubah nama, email, password sendiri lewat `PUT /api/profile`; ganti password wajib menyertakan password saat ini) dan **Keluar**.
 - **Tema tampilan** (palet terang & gelap) diatur admin di Settings dan berlaku **untuk semua pengguna** (tersimpan di tabel `settings`; `POST /api/settings` khusus admin, `GET` tetap terbuka). Toggle mode gelap/terang tetap per pengguna.
@@ -294,7 +296,7 @@ docker-compose.yml
 
 ## Endpoint API (ringkas)
 
-Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token.
+Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token. `POST /api/register` hanya menerima akun pertama; berikutnya 403.
 
 - **Auth:** `POST /api/register`, `POST /api/login`, `GET /api/me`, `PUT /api/profile` (nama/email/password sendiri), `POST /api/logout`
 - **Sessions:** `GET|POST /api/sessions`, `PUT|DELETE /api/sessions/{id}`

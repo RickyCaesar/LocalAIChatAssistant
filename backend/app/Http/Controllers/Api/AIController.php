@@ -148,17 +148,42 @@ class AIController extends Controller
         return response()->json(['markdown' => $md]);
     }
 
-    // Hermes (agent mode) kadang menulis .md ke /home/ROG lalu membalas narasi.
+    // Hermes (agent mode) kadang menulis .md ke folder output lalu membalas narasi.
     // Utamakan isi filenya, lalu blok kode, lalu teks mentah kalau memang Markdown.
     private static function markdownFromReply(string $text): ?string
     {
-        if (preg_match_all('#/home/ROG/[^\s`"\'),;]+\.md#i', $text, $m)) {
+        $containerRoot = realpath(storage_path('app/private'));
+        $hostRoot = rtrim((string) env('HERMES_OUTPUT_HOST', '/home/ROG/MyAssistant/backend/storage/app/private/hermes-output'), '/');
+        $outputRoot = $containerRoot ? $containerRoot.DIRECTORY_SEPARATOR.'hermes-output' : false;
+        if (! $outputRoot) {
+            return null;
+        }
+        $roots = [$outputRoot];
+        if ($hostRoot !== '' && $hostRoot !== $outputRoot) {
+            $roots[] = $hostRoot;
+        }
+
+        foreach ($roots as $root) {
+            if (! preg_match_all('#'.preg_quote($root, '#').'/[^\s`"\'),;]+\.md#i', $text, $m)) {
+                continue;
+            }
             foreach (array_reverse($m[0]) as $path) {
-                if (is_file($path)) {
-                    $body = trim((string) file_get_contents($path));
-                    if ($body !== '') {
-                        return self::stripFences($body);
-                    }
+                if (str_starts_with($path, $outputRoot.'/')) {
+                    $real = $path;
+                } elseif ($hostRoot !== '' && str_starts_with($path, $hostRoot.'/')) {
+                    $real = $outputRoot.'/'.substr($path, strlen($hostRoot) + 1);
+                } else {
+                    continue;
+                }
+
+                $real = realpath($real);
+                if ($real === false || ! str_starts_with($real, $outputRoot.'/') || ! is_file($real)) {
+                    continue;
+                }
+
+                $body = trim((string) file_get_contents($real));
+                if ($body !== '') {
+                    return self::stripFences($body);
                 }
             }
         }

@@ -10,7 +10,7 @@ services:
       - ./backend/.env:/app/.env:ro
       - ./backend/database.sqlite:/app/database/database.sqlite
       - ./backend/storage/app:/app/storage/app
-      - ${HOME}:${HOME}:ro
+      - ${HOME}/.hermes:${HOME}/.hermes:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -29,7 +29,6 @@ services:
       - ./backend/.env:/app/.env:ro
       - ./backend/database.sqlite:/app/database/database.sqlite
       - ./backend/storage/app:/app/storage/app
-      - ${HOME}:${HOME}:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

@@ -27,6 +27,13 @@ $doc = [
                 ['Dilarang membawa catatan'],
             ],
         ],
+        [
+            'heading' => 'Identitas',
+            'columns' => ['NISN', 'Nama'],
+            'rows' => [
+                ['0012345678', 'Ani'],
+            ],
+        ],
     ],
 ];
 
@@ -72,10 +79,16 @@ $sst = (string) $zip->getFromName('xl/sharedStrings.xml');
 if (! str_contains($sst, 'Budi Santoso') || ! str_contains($sst, 'Tata Tertib')) {
     $fail('shared strings missing expected content');
 }
+if (! str_contains($sst, '0012345678')) {
+    $fail('leading-zero ID was not preserved as text');
+}
 
 $sheet = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
 if (! str_contains($sheet, 't="s"') || ! str_contains($sheet, '<row r="1">')) {
     $fail('worksheet malformed');
+}
+if (str_contains($sheet, '<v>0012345678</v>')) {
+    $fail('leading-zero ID was written as a number');
 }
 
 $zip->close();

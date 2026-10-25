@@ -893,6 +893,8 @@ export default function App() {
           voice: s.tts_voice || '',
           speed: Number(s.tts_speed) || 1,
         });
+        const maxMb = Number(s.max_upload_mb);
+        if (maxMb > 0) localStorage.setItem('max-upload-mb', String(maxMb));
         if (s.theme_palette) {
           document.documentElement.dataset.palette = s.theme_palette;
           localStorage.setItem('palette', s.theme_palette);
@@ -982,6 +984,7 @@ export default function App() {
   };
 
   const removeSession = (id) => {
+    if (!window.confirm('Hapus percakapan ini? Media di Gallery tetap tersimpan.')) return;
     api(`/api/sessions/${id}`, { method: 'DELETE' }).catch(() => {});
     setSessions((prev) => prev.filter((s) => s.id !== id));
     if (activeId === id) {

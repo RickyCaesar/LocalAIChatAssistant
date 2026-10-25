@@ -86,8 +86,12 @@ class DocumentBuilder
                 }
                 $ref = self::colLetter($c).$r;
                 $s = $style > 0 ? ' s="'.$style.'"' : '';
-                $isNumber = is_int($val) || is_float($val)
-                    || (is_string($val) && preg_match('/^-?\d+(\.\d+)?$/', $val) === 1);
+                // ID seperti NISN harus tetap teks: leading zero atau >15 digit.
+                $numericString = is_string($val)
+                    && preg_match('/^-?\d+(\.\d+)?$/', $val) === 1
+                    && ! preg_match('/^-?0\d/', $val)
+                    && strlen(ltrim($val, '-')) <= 15;
+                $isNumber = is_int($val) || is_float($val) || $numericString;
                 if ($isNumber) {
                     $xml .= '<c r="'.$ref.'"'.$s.'><v>'.self::esc((string) $val).'</v></c>';
                 } else {

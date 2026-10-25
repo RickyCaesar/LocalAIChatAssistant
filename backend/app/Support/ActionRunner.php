@@ -19,11 +19,16 @@ class ActionRunner
             return [self::stripActions($text), $results];
         }
 
+        $lines = preg_split('/\R/', $text) ?: [];
         $keep = [];
-        foreach (preg_split('/\R/', $text) ?: [] as $line) {
+        for ($i = 0, $n = count($lines); $i < $n; $i++) {
+            $line = $lines[$i];
             if (preg_match('/^\s*ACTION:\s*([A-Z_]+)\s*(.*?)\s*$/i', $line, $m)) {
                 $cmd = strtoupper($m[1]);
                 $arg = trim($m[2] ?? '');
+                if ($cmd === 'GENERATE_PPTX' && $arg === '') {
+                    [$arg, $i] = self::pptxBlock($lines, $i);
+                }
                 $r = match ($cmd) {
                     'TODO_ADD' => self::todoAdd($userId, $arg),
                     'TODO_DONE' => self::todoDone($userId, $arg),
@@ -87,7 +92,10 @@ class ActionRunner
             ."ACTION: DOC_BUILD <single-line JSON> — build an XLSX spreadsheet and send it to the chat/Gallery. Schema: {\"filename\":\"name.xlsx\",\"sheet\":\"Sheet\",\"title\":\"Report title\",\"blocks\":[{\"heading\":\"Section\",\"columns\":[\"Col A\",\"Col B\"],\"rows\":[[\"a1\",\"b1\"],[\"a2\",\"b2\"]]}]}. Use multiple blocks for several titled tables/lists.\n"
             ."ACTION: NOTULEN_BUILD <single-line JSON> — build a DOCX notulen rapat (pola Dinas Pendidikan Kaltim: kop, judul, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup) and send it to the chat/Gallery. Schema: {\"filename\":\"Notulen.docx\",\"judul\":\"NOTULENSI RAPAT\",\"subjudul\":\"Rapat Koordinasi BOSP\",\"identitas\":{\"Hari/Tanggal\":\"Selasa, 20 Oktober 2026\",\"Waktu\":\"09.00 WITA\",\"Tempat\":\"Daring via Zoom\",\"Moderator\":\"...\",\"Peserta\":\"...\"},\"ringkasan\":[\"...\"],\"agenda\":[\"...\"],\"pembahasan\":[{\"judul\":\"A. ...\",\"paragraf\":[\"...\"],\"poin\":[\"...\"]}],\"tanya_jawab\":[\"...\"],\"keputusan\":[\"...\"],\"action_items\":[[\"Penanggung Jawab\",\"Tindakan\"],[\"Tim A\",\"Melakukan ...\"]],\"penutup\":[\"...\"],\"penanda_tangan\":[[\"Pimpinan Kegiatan\",\"...\"],[\"Notulen\",\"...\"]],\"catatan\":[\"...\"]}. Use this instead of writing your own DOCX script.\n"
             ."ACTION: GENERATE_PPTX\n"
-            ."<Marp Markdown — use --- to separate slides, frontmatter like `---\ntheme: default\nclass: invert\n---` to switch themes/dark mode. Include slide titles and brief bullets based on the user's request. The entire Marp content goes after this line on the next lines.> Emit the ACTION line and the Markdown immediately after it.";
+            ."```marp\n"
+            ."<Marp Markdown — use --- to separate slides, frontmatter like `---\ntheme: default\nclass: invert\n---` to switch themes/dark mode. Include slide titles and brief bullets based on the user's request.>\n"
+            ."```\n"
+            ."Emit the ACTION line immediately followed by the fenced marp block.";
     }
 
     private static function todoAdd(int $userId, string $arg): string
@@ -179,6 +187,35 @@ class ActionRunner
         return $titles === []
             ? '✖ Event "'.$arg.'" tidak ditemukan.'
             : '✔ Event dihapus: "'.implode('", "', $titles).'".';
+    }
+
+    private static function pptxBlock(array $lines, int $i): array
+    {
+        $n = count($lines);
+        $j = $i + 1;
+        while ($j < $n && trim($lines[$j]) === '') {
+            $j++;
+        }
+
+        if ($j < $n && preg_match('/^\s*```[a-z]*\s*$/i', $lines[$j])) {
+            $j++;
+            $buf = [];
+            while ($j < $n && ! preg_match('/^\s*```\s*$/', $lines[$j])) {
+                $buf[] = $lines[$j++];
+            }
+            if ($j < $n) {
+                $j++;
+            }
+
+            return [trim(implode("\n", $buf)), $j - 1];
+        }
+
+        $buf = [];
+        while ($j < $n && ! preg_match('/^\s*ACTION:/i', $lines[$j])) {
+            $buf[] = $lines[$j++];
+        }
+
+        return [trim(implode("\n", $buf)), $j - 1];
     }
 
     private static function generatePptx(int $userId, string $arg, ?int $sessionId): string

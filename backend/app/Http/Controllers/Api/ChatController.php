@@ -18,7 +18,12 @@ class ChatController extends Controller
 {
     // Ditempel di pesan user terakhir agar model tidak mengikuti jawaban lama
     // yang mengaku tidak punya akses file atau menyuruh buka folder.
-    private const RUNTIME_BRIEFING = "\n\n[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI] Kamu berjalan di MyAssistant dan punya tool terminal, file, serta execute_code. Abaikan jawaban lama yang mengatakan kamu tidak punya akses. Jangan menulis kode untuk dijalankan user, jangan menyuruh user membuka folder/File Explorer, dan jangan mengaku tidak bisa menyimpan file. Kerjakan sendiri sekarang. Simpan setiap berkas hasil ke /home/ROG/MyAssistant/backend/storage/app/private/hermes-output/ lalu balas dengan tepat satu baris MEDIA: <path> per berkas. Untuk notulen rapat: jangan menulis skrip sendiri, susun isinya lalu emit ACTION: NOTULEN_BUILD <JSON> — aplikasinya yang menyusun DOCX (PDF bisa dibuat dari berkas itu di Gallery).";
+    private function runtimeBriefing(): string
+    {
+        $out = rtrim((string) env('HERMES_OUTPUT_HOST', '/home/ROG/MyAssistant/backend/storage/app/private/hermes-output'), '/');
+
+        return "\n\n[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI] Kamu berjalan di MyAssistant dan punya tool terminal, file, serta execute_code. Abaikan jawaban lama yang mengatakan kamu tidak punya akses. Jangan menulis kode untuk dijalankan user, jangan menyuruh user membuka folder/File Explorer, dan jangan mengaku tidak bisa menyimpan file. Kerjakan sendiri sekarang. Simpan setiap berkas hasil ke {$out}/ lalu balas dengan tepat satu baris MEDIA: <path> per berkas. Aplikasi hanya mengimpor berkas dari folder hermes-output itu; jangan mengandalkan path lain. Untuk notulen rapat: jangan menulis skrip sendiri, susun isinya lalu emit ACTION: NOTULEN_BUILD <JSON> — aplikasinya yang menyusun DOCX (PDF bisa dibuat dari berkas itu di Gallery).";
+    }
 
     private function scrubMediaRefs(string $text): string
     {
@@ -167,24 +172,31 @@ class ChatController extends Controller
 
     private function importHostFile(string $path, ?int $sessionId): ?Media
     {
-        $containerRoot = storage_path('app/private');
-        $hostRoot = rtrim((string) env('HERMES_OUTPUT_HOST', '/home/ROG/MyAssistant/backend/storage/app/private'), '/');
-
-        $real = $path;
-        $readable = str_starts_with($path, '/home/ROG/');
-        if ($hostRoot !== '' && str_starts_with($path, $hostRoot.'/')) {
-            $real = $containerRoot.'/'.substr($path, strlen($hostRoot) + 1);
-            $readable = true;
+        $containerRoot = realpath(storage_path('app/private'));
+        $hostRoot = rtrim((string) env('HERMES_OUTPUT_HOST', '/home/ROG/MyAssistant/backend/storage/app/private/hermes-output'), '/');
+        if ($containerRoot === false) {
+            return null;
         }
-        if (! $readable || ! is_file($real)) {
+        $outputRoot = $containerRoot.DIRECTORY_SEPARATOR.'hermes-output';
+
+        if (str_starts_with($path, $outputRoot.'/')) {
+            $real = $path;
+        } elseif ($hostRoot !== '' && str_starts_with($path, $hostRoot.'/')) {
+            $real = $outputRoot.'/'.substr($path, strlen($hostRoot) + 1);
+        } else {
+            return null;
+        }
+
+        $real = realpath($real);
+        if ($real === false || ! str_starts_with($real, $outputRoot.DIRECTORY_SEPARATOR) || ! is_file($real)) {
             return null;
         }
         if (filesize($real) > 25 * 1024 * 1024) {
             return null;
         }
 
-        $bytes = (string) file_get_contents($real);
-        if ($bytes === '' || $bytes === false) {
+        $bytes = file_get_contents($real);
+        if ($bytes === false || $bytes === '') {
             return null;
         }
 
@@ -319,7 +331,7 @@ class ChatController extends Controller
         $messages = [
             [
                 'role' => 'system',
-                'content' => (string) env('AI_SYSTEM_PROMPT', 'You are Hermes, a helpful and concise AI assistant. Whenever a request involves producing or processing a file (document, spreadsheet, presentation, PDF, image, code, report), you MUST send that file to the user by saving it and reporting it. Save it into the folder /home/ROG/MyAssistant/backend/storage/app/private/hermes-output, then include in your reply exactly one line per file: MEDIA: /home/ROG/MyAssistant/backend/storage/app/private/hermes-output/<filename>. Never claim you cannot send files — saving plus the MEDIA: line is how you send them. If a file is already saved elsewhere, just give its full absolute path in the reply.').ActionRunner::toolsInstruction(),
+                'content' => (string) env('AI_SYSTEM_PROMPT', 'You are Hermes, a helpful and concise AI assistant. Whenever a request involves producing or processing a file (document, spreadsheet, presentation, PDF, image, code, report), save it into /home/ROG/MyAssistant/backend/storage/app/private/hermes-output, then include in your reply exactly one line per file: MEDIA: /home/ROG/MyAssistant/backend/storage/app/private/hermes-output/<filename>. The app only imports files from that folder, so do not rely on other paths. To make a PDF, run /home/ROG/MyAssistant/tools/topdf.sh <file inside that folder> and send the printed PDF path. Never claim you cannot send files — saving plus the MEDIA: line is how you send them.').ActionRunner::toolsInstruction(),
             ],
         ];
 
@@ -350,10 +362,11 @@ class ChatController extends Controller
         if (is_string($userContent) && trim($userContent) === '') {
             $userContent = '[...]';
         }
+        $briefing = $this->runtimeBriefing();
         if (is_array($userContent) && isset($userContent[0]['text'])) {
-            $userContent[0]['text'] = (string) $userContent[0]['text'].self::RUNTIME_BRIEFING;
+            $userContent[0]['text'] = (string) $userContent[0]['text'].$briefing;
         } else {
-            $userContent = (string) $userContent.self::RUNTIME_BRIEFING;
+            $userContent = (string) $userContent.$briefing;
         }
         $messages[] = ['role' => 'user', 'content' => $userContent];
 

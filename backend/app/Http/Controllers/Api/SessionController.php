@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChatSession;
+use App\Models\Media;
 use Illuminate\Http\Request;
 
 class SessionController extends Controller
@@ -58,6 +59,9 @@ class SessionController extends Controller
     public function destroy(string $id)
     {
         $session = ChatSession::where('user_id', auth()->id())->findOrFail($id);
+        Media::where('user_id', auth()->id())
+            ->where('session_id', $session->id)
+            ->update(['session_id' => null]);
         $session->delete();
 
         return response()->json(['ok' => true]);

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Media;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -81,18 +83,20 @@ class UserController extends Controller
             return response()->json(['error' => 'Tidak bisa menghapus akun sendiri.'], 422);
         }
 
-        // Prevent clobbering user data: sessions+media cascade on delete, so
-        // refuse unless the account is already empty. Delete its sessions
-        // (sidebar) and gallery items first, then this will pass.
-        $sessions = \App\Models\ChatSession::where('user_id', $user->id)->count();
-        $media = \App\Models\Media::where('user_id', $user->id)->count();
-        if ($sessions > 0 || $media > 0) {
-            return response()->json([
-                'error' => "User masih punya data ($sessions sesi, $media media). Hapus sesi & media-nya dulu.",
-            ], 422);
-        }
+        $mediaPaths = Media::where('user_id', $user->id)->pluck('path');
+        $taskPaths = Task::where('user_id', $user->id)->get()
+            ->map(fn (Task $task) => (string) ($task->payload['path'] ?? ''))
+            ->filter()
+            ->values();
 
         $user->delete();
+
+        foreach ($mediaPaths as $path) {
+            @unlink(storage_path('app/private/'.$path));
+        }
+        foreach ($taskPaths as $path) {
+            @unlink(storage_path('app/'.$path));
+        }
 
         return response()->json(['ok' => true]);
     }

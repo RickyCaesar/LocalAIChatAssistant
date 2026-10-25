@@ -15,8 +15,8 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\EnsureBearerToken;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
 Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::get('/me', [AuthController::class, 'me']);

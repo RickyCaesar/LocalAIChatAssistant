@@ -23,7 +23,8 @@ export function clearToken() {
 export const mediaUrl = (id) => `${API_URL}/api/media/${id}?auth=${encodeURIComponent(getToken() || '')}`;
 
 export const mediaSrc = (path) => {
-  const url = path.startsWith('http') ? path : `${API_URL}${path}`;
+  if (/^(?:https?:|data:|blob:)/i.test(path) || !path.startsWith('/api/media/')) return path;
+  const url = `${API_URL}${path}`;
   const sep = url.includes('?') ? '&' : '?';
   return `${url}${sep}auth=${encodeURIComponent(getToken() || '')}`;
 };

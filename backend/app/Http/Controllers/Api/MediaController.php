@@ -136,11 +136,24 @@ class MediaController extends Controller
     {
         $media = Media::where('user_id', auth()->id())->findOrFail($id);
 
-        $response = response()->file(storage_path('app/private/'.$media->path), ['Content-Type' => $media->mime]);
-        $response->setContentDisposition(
-            request()->boolean('download') ? 'attachment' : 'inline',
-            $media->filename
-        );
+        $mime = strtolower((string) $media->mime);
+        $inline = in_array($mime, [
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/avif',
+            'application/pdf',
+            'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/webm',
+            'video/mp4', 'video/webm', 'video/ogg',
+        ], true) && ! request()->boolean('download');
+
+        $headers = [
+            'Content-Type' => $media->mime,
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+        if (! $inline) {
+            $headers['Content-Security-Policy'] = "default-src 'none'; sandbox";
+        }
+
+        $response = response()->file(storage_path('app/private/'.$media->path), $headers);
+        $response->setContentDisposition($inline ? 'inline' : 'attachment', $media->filename);
 
         return $response;
     }
