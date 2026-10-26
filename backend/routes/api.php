@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PerformanceReportController;
 use App\Http\Controllers\Api\QueueController;
 use App\Http\Controllers\Api\SessionController;
 use App\Http\Controllers\Api\SkillController;
@@ -15,7 +16,6 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\EnsureBearerToken;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
 Route::middleware(EnsureBearerToken::class)->group(function () {
@@ -55,9 +55,18 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::post('/notifications/{id}/read', [NotificationController::class, 'read']);
 
     Route::get('/todos', [TodoController::class, 'index']);
+    Route::get('/todos/{id}', [TodoController::class, 'show']);
     Route::post('/todos', [TodoController::class, 'store']);
+    Route::post('/todos/{id}/complete', [TodoController::class, 'complete']);
     Route::put('/todos/{id}', [TodoController::class, 'update']);
     Route::delete('/todos/{id}', [TodoController::class, 'destroy']);
+
+    Route::get('/performance/plans', [PerformanceReportController::class, 'plans']);
+    Route::post('/performance/plans', [PerformanceReportController::class, 'storePlan']);
+    Route::put('/performance/plans/{plan}', [PerformanceReportController::class, 'updatePlan']);
+    Route::get('/performance/report', [PerformanceReportController::class, 'index']);
+    Route::post('/performance/report', [PerformanceReportController::class, 'store']);
+    Route::post('/performance/templates/{key}', [PerformanceReportController::class, 'generateTemplate']);
 
     Route::get('/events', [EventController::class, 'index']);
     Route::post('/events', [EventController::class, 'store']);

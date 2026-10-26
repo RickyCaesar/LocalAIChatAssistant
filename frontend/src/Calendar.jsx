@@ -65,15 +65,39 @@ const fmtDay = (d) => d.toLocaleDateString('id-ID', { weekday: 'long', day: 'num
 const input =
   'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue';
 
+const eventCls = (done) =>
+  done
+    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300'
+    : 'bg-skyblue/30 text-brand-700 dark:bg-brand-800 dark:text-skyblue';
+
+const emptyForm = (date) => ({
+  title: '',
+  date,
+  time: '09:00',
+  duration: 1,
+  description: '',
+  recurrence: 'none',
+  syncTodo: false,
+  done: false,
+  performancePlanId: '',
+  mediaId: '',
+  tindakLanjut: '',
+});
+
 export default function CalendarPage() {
   const [events, setEvents] = useState([]);
+  const [options, setOptions] = useState({ plans: [], media: [] });
+  const [planFilter, setPlanFilter] = useState('');
   const [cursor, setCursor] = useState(() => new Date());
   const [view, setView] = useState('bulan');
   const [selectedKey, setSelectedKey] = useState(() => dayKey(new Date()));
-  const [form, setForm] = useState({ title: '', date: dayKey(new Date()), time: '09:00', description: '', recurrence: 'none' });
+  const [form, setForm] = useState(() => emptyForm(dayKey(new Date())));
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [viewItem, setViewItem] = useState(null);
+  const [todoDetail, setTodoDetail] = useState(null);
+  const [loadingView, setLoadingView] = useState(false);
 
   const load = () => {
     setError(null);
@@ -84,6 +108,17 @@ export default function CalendarPage() {
   };
 
   useEffect(load, []);
+
+  useEffect(() => {
+    let live = true;
+    Promise.all([
+      api('/api/performance/plans').catch(() => ({ plans: [] })),
+      api('/api/media').catch(() => ({ media: [] })),
+    ]).then(([plans, media]) => {
+      if (live) setOptions({ plans: plans.plans || [], media: media.media || [] });
+    });
+    return () => { live = false; };
+  }, []);
 
   const y = cursor.getFullYear();
   const m = cursor.getMonth();
@@ -103,38 +138,54 @@ export default function CalendarPage() {
   const visibleFrom = view === 'minggu' ? weekStart : new Date(y, m, 1);
   const visibleTo = view === 'minggu' ? addDays(weekStart, 7) : new Date(y, m + 1, 1);
 
+  const filteredEvents = useMemo(
+    () => (planFilter ? events.filter((e) => String(e.performance_plan_id) === planFilter) : events),
+    [events, planFilter]
+  );
+
   const byDay = useMemo(() => {
     const map = {};
-    for (const occ of expand(events, visibleFrom, visibleTo)) {
+    for (const occ of expand(filteredEvents, visibleFrom, visibleTo)) {
       const k = dayKey(occ.start);
       (map[k] = map[k] || []).push(occ);
     }
     for (const k of Object.keys(map)) map[k].sort((a, b) => a.start - b.start);
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events, view, y, m, weekStart.getTime()]);
+  }, [filteredEvents, view, y, m, weekStart.getTime()]);
 
-  const agenda = useMemo(() => expand(events, today, addDays(today, 120)).sort((a, b) => a.start - b.start), [events, today.getTime()]);
+  const agenda = useMemo(
+    () => expand(filteredEvents, today, addDays(today, 120)).sort((a, b) => a.start - b.start),
+    [filteredEvents, today.getTime()]
+  );
 
   const selectedEvents = useMemo(() => {
     const from = new Date(`${selectedKey}T00:00:00`);
-    return expand(events, from, addDays(from, 1)).sort((a, b) => a.start - b.start);
+    return expand(filteredEvents, from, addDays(from, 1)).sort((a, b) => a.start - b.start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events, selectedKey]);
+  }, [filteredEvents, selectedKey]);
 
   const resetForm = () => {
-    setForm({ title: '', date: selectedKey, time: '09:00', description: '', recurrence: 'none' });
+    setForm(emptyForm(selectedKey));
     setEditingId(null);
   };
 
   const submit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
+    const start = new Date(`${form.date}T${form.time}`);
+    const end = new Date(start.getTime() + (Number(form.duration) || 1) * 3600000);
     const body = JSON.stringify({
       title: form.title,
-      start_at: new Date(`${form.date}T${form.time}`).toISOString(),
+      start_at: start.toISOString(),
+      end_at: end.toISOString(),
       description: form.description || null,
       recurrence: form.recurrence,
+      sync_todo: Boolean(form.syncTodo),
+      performance_plan_id: form.performancePlanId || null,
+      media_id: form.mediaId || null,
+      tindak_lanjut: form.tindakLanjut || null,
+      ...(editingId ? { done: Boolean(form.done) } : {}),
     });
     try {
       if (editingId) {
@@ -152,18 +203,47 @@ export default function CalendarPage() {
 
   const startEdit = (ev) => {
     const d = new Date(ev.start_at);
+    const end = ev.end_at ? new Date(ev.end_at) : null;
+    const hours = ev.durasi_jam ?? (end && end > d ? Math.round(((end - d) / 3600000) * 100) / 100 : 1);
     setEditingId(ev.id);
+    setViewItem(null);
+    setTodoDetail(null);
     setForm({
       title: ev.title,
       date: dayKey(d),
       time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+      duration: hours,
       description: ev.description || '',
       recurrence: ev.recurrence || 'none',
+      syncTodo: Boolean(ev.todo_id),
+      done: Boolean(ev.done),
+      performancePlanId: ev.performance_plan_id ?? '',
+      mediaId: ev.media_id ?? '',
+      tindakLanjut: ev.tindak_lanjut || '',
     });
   };
 
+  const openView = async (ev) => {
+    setViewItem(ev);
+    setTodoDetail(null);
+    if (ev.todo_id) {
+      setLoadingView(true);
+      try {
+        const res = await api(`/api/todos/${ev.todo_id}`);
+        setTodoDetail(res.todo || null);
+      } catch {
+        setTodoDetail(null);
+      } finally {
+        setLoadingView(false);
+      }
+    }
+  };
+
   const remove = async (ev) => {
-    const msg = ev.recurrence && ev.recurrence !== 'none' ? `Hapus seluruh seri "${ev.title}"?` : `Hapus acara "${ev.title}"?`;
+    const linked = ev.todo_id ? ' Todo yang tertaut juga dihapus.' : '';
+    const msg = ev.recurrence && ev.recurrence !== 'none'
+      ? `Hapus seluruh seri "${ev.title}"?${linked}`
+      : `Hapus acara "${ev.title}"?${linked}`;
     if (!window.confirm(msg)) return;
     try {
       await api(`/api/events/${ev.id}`, { method: 'DELETE' });
@@ -189,21 +269,34 @@ export default function CalendarPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Kalender</h2>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Agenda, jadwal & hari libur Indonesia. Bisa dikelola lewat chat dengan Hermes.</p>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Agenda, jadwal, e-SAKIP & hari libur Indonesia. Bisa dikelola lewat chat dengan Hermes.</p>
         </div>
-        <div className="flex items-center gap-1 rounded-xl bg-cream p-1 dark:bg-brand-900">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setView(t.key)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                view === t.key ? 'bg-white shadow-sm dark:bg-brand-600' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={planFilter}
+            onChange={(e) => setPlanFilter(e.target.value)}
+            aria-label="Filter indikator e-SAKIP"
+            className={`${input} !py-1.5 text-xs`}
+          >
+            <option value="">Semua indikator</option>
+            {options.plans.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-1 rounded-xl bg-cream p-1 dark:bg-brand-900">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setView(t.key)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                  view === t.key ? 'bg-white shadow-sm dark:bg-brand-600' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -265,9 +358,14 @@ export default function CalendarPage() {
                       {holiday && <p className="mt-0.5 truncate text-[9px] font-medium text-red-500">{holiday}</p>}
                       <div className="mt-1 space-y-1">
                         {dayEvents.slice(0, 3).map((occ) => (
-                          <div key={occ.key} className="truncate rounded-md bg-skyblue/30 px-1.5 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue">
-                            {fmtTime(occ.start)} {occ.event.title}
-                          </div>
+                          <button
+                            key={occ.key}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openView(occ.event); }}
+                            className={`block w-full truncate rounded-md px-1.5 py-0.5 text-left text-[10px] font-medium ${eventCls(occ.event.done)}`}
+                          >
+                            {occ.event.done ? '✓ ' : ''}{fmtTime(occ.start)} {occ.event.title}
+                          </button>
                         ))}
                         {dayEvents.length > 3 && <div className="px-1.5 text-[10px] text-slate-400">+{dayEvents.length - 3} lagi</div>}
                       </div>
@@ -295,10 +393,10 @@ export default function CalendarPage() {
                         <button
                           key={occ.key}
                           type="button"
-                          onClick={() => { setSelectedKey(key); setView('bulan'); setCursor(new Date(d.getFullYear(), d.getMonth(), 1)); }}
-                          className="block w-full truncate rounded-md bg-skyblue/30 px-1.5 py-1 text-left text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue"
+                          onClick={() => { openView(occ.event); setSelectedKey(key); setView('bulan'); setCursor(new Date(d.getFullYear(), d.getMonth(), 1)); }}
+                          className={`block w-full truncate rounded-md px-1.5 py-1 text-left text-[10px] font-medium ${eventCls(occ.event.done)}`}
                         >
-                          {fmtTime(occ.start)} {occ.event.title}
+                          {occ.event.done ? '✓ ' : ''}{fmtTime(occ.start)} {occ.event.title}
                         </button>
                       ))}
                     </div>
@@ -326,21 +424,38 @@ export default function CalendarPage() {
                           <p className={`text-lg font-semibold leading-none ${holiday ? 'text-red-500' : ''}`}>{occ.start.getDate()}</p>
                           <p className="text-[10px] text-slate-400">{MONTH_NAMES[occ.start.getMonth()].slice(0, 3)}</p>
                         </div>
-                        <div className="min-w-0 flex-1">
+                        <button type="button" onClick={() => openView(occ.event)} className="min-w-0 flex-1 text-left">
                           <p className="truncate text-sm font-medium">
-                            {fmtTime(occ.start)} · {occ.event.title}
+                            {occ.event.done ? '✓ ' : ''}{fmtTime(occ.start)} · {occ.event.title}
                             {REC_LABEL[occ.event.recurrence] ? <span className="ml-2 text-[10px] font-normal text-slate-400">{REC_LABEL[occ.event.recurrence]}</span> : null}
                           </p>
                           {holiday && <p className="text-[11px] font-medium text-red-500">{holiday}</p>}
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            {occ.event.performance_plan && (
+                              <span className="rounded-full bg-skyblue/20 px-2 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue">{occ.event.performance_plan.name}</span>
+                            )}
+                            {occ.event.done && (
+                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">Selesai</span>
+                            )}
+                            {occ.event.media && <span className="text-[10px] text-slate-400">Bukti: {occ.event.media.filename}</span>}
+                            {occ.event.durasi_jam ? <span className="text-[10px] text-slate-400">{occ.event.durasi_jam} jam</span> : null}
+                          </div>
+                          {occ.event.tindak_lanjut && <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{occ.event.tindak_lanjut}</p>}
                           {occ.event.description && <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{occ.event.description}</p>}
-                        </div>
-                        <button type="button" aria-label="Edit acara" onClick={() => startEdit(occ.event)} className="shrink-0 rounded-md p-1 text-slate-400 transition hover:text-brand dark:hover:text-skyblue">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                            <path d="M12 20h9" />
-                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                          </svg>
                         </button>
-                        <button type="button" aria-label="Hapus acara" onClick={() => remove(occ.event)} className="shrink-0 rounded-md p-1 text-slate-400 transition hover:text-blush">
+              <button type="button" aria-label="Lihat detail" onClick={() => openView(occ.event)} className="shrink-0 rounded-md p-1 text-slate-400 transition hover:text-brand dark:hover:text-skyblue">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+              <button type="button" aria-label="Edit acara" onClick={() => startEdit(occ.event)} className="shrink-0 rounded-md p-1 text-slate-400 transition hover:text-brand dark:hover:text-skyblue">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </button>
+              <button type="button" aria-label="Hapus acara" onClick={() => remove(occ.event)} className="shrink-0 rounded-md p-1 text-slate-400 transition hover:text-blush">
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                             <path d="M3 6h18" />
                             <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -357,6 +472,72 @@ export default function CalendarPage() {
         </>
       )}
 
+      {viewItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+              <h3 className="text-sm font-semibold">Detail Kegiatan</h3>
+              <button type="button" onClick={() => { setViewItem(null); setTodoDetail(null); }} className="text-xs text-slate-400 hover:text-slate-900 dark:hover:text-white">Tutup</button>
+            </div>
+            <div className="space-y-2 px-4 py-3 text-sm">
+              <div>
+                <p className="text-xs text-slate-400">Judul</p>
+                <p className="font-medium">{viewItem.title}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-slate-400">Mulai</p>
+                  <p>{new Date(viewItem.start_at).toLocaleString('id-ID')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Durasi</p>
+                  <p>{viewItem.durasi_jam ? `${viewItem.durasi_jam} jam` : '-'}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Indikator e-SAKIP / Laporan Kinerja</p>
+                <p>{viewItem.performance_plan?.name || '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Status</p>
+                <p>{viewItem.done ? 'Selesai' : 'Aktif'}</p>
+              </div>
+              {(viewItem.description || todoDetail?.notes) && (
+                <div>
+                  <p className="text-xs text-slate-400">Catatan</p>
+                  <p className="whitespace-pre-wrap text-slate-600 dark:text-slate-300">{viewItem.description || todoDetail?.notes}</p>
+                </div>
+              )}
+              {(viewItem.tindak_lanjut || todoDetail?.tindak_lanjut) && (
+                <div>
+                  <p className="text-xs text-slate-400">Tindak Lanjut / Hasil</p>
+                  <p className="whitespace-pre-wrap text-slate-600 dark:text-slate-300">{viewItem.tindak_lanjut || todoDetail?.tindak_lanjut}</p>
+                </div>
+              )}
+              {(viewItem.media || todoDetail?.media) && (
+                <div>
+                  <p className="text-xs text-slate-400">Bukti Fisik</p>
+                  <a href={`/api/media/${viewItem.media?.id || todoDetail?.media?.id}`} target="_blank" rel="noreferrer" className="font-medium text-brand underline dark:text-skyblue">
+                    {viewItem.media?.filename || todoDetail?.media?.filename}
+                  </a>
+                </div>
+              )}
+              {loadingView && <p className="text-xs text-slate-400">Memuat detail todolist...</p>}
+              {todoDetail && (
+                <div>
+                  <p className="text-xs text-slate-400">Terkait TodoList</p>
+                  <p>#{todoDetail.id} - {todoDetail.title} {todoDetail.due_at ? `(${new Date(todoDetail.due_at).toLocaleString('id-ID')})` : ''}</p>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-2 dark:border-slate-700">
+              <button type="button" onClick={() => { setViewItem(null); setTodoDetail(null); startEdit(viewItem); }} className="rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-slate-50 dark:hover:bg-brand-800">Edit</button>
+              <button type="button" onClick={() => { setViewItem(null); setTodoDetail(null); }} className="rounded-lg px-3 py-1.5 text-xs">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <form onSubmit={submit} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
           <div className="flex items-center justify-between">
@@ -368,15 +549,59 @@ export default function CalendarPage() {
           <div className="mt-3 space-y-2">
             <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Judul acara..." maxLength={255} className={`w-full ${input}`} />
             <div className="flex flex-wrap gap-2">
-              <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className={`min-w-0 flex-1 ${input}`} />
-              <input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className={input} />
-              <select value={form.recurrence} onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value }))} className={input}>
+              <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} aria-label="Tanggal" className={`min-w-0 flex-1 ${input}`} />
+              <input type="time" value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} aria-label="Jam mulai" className={input} />
+              <input type="number" min="0.25" max="24" step="0.25" value={form.duration} onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))} aria-label="Durasi jam" placeholder="Jam" className={`w-24 ${input}`} />
+              <select value={form.recurrence} onChange={(e) => setForm((f) => ({ ...f, recurrence: e.target.value }))} aria-label="Pengulangan" className={input}>
                 {RECURRENCE.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
               </select>
             </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select value={form.performancePlanId} onChange={(e) => setForm((f) => ({ ...f, performancePlanId: e.target.value }))} aria-label="Indikator e-SAKIP" className={input}>
+                <option value="">Indikator e-SAKIP...</option>
+                {options.plans.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="file"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setError(null);
+                    const fd = new FormData();
+                    fd.append('image', file);
+                    try {
+                      const res = await api('/api/media', { method: 'POST', body: fd });
+                      setForm((f) => ({ ...f, mediaId: res.id }));
+                    } catch (err) {
+                      setError(err.message);
+                    } finally {
+                      e.target.value = '';
+                    }
+                  }}
+                  className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-400 dark:file:bg-brand-800 dark:file:text-slate-200"
+                />
+                {form.mediaId && <span className="text-[11px] text-emerald-600 dark:text-emerald-300">File terlampir</span>}
+              </div>
+            </div>
             <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Catatan (opsional)" rows={2} className={`w-full resize-none ${input}`} />
+            <input value={form.tindakLanjut} onChange={(e) => setForm((f) => ({ ...f, tindakLanjut: e.target.value }))} placeholder="Tindak lanjut / hasil (opsional)" maxLength={2000} className={`w-full ${input}`} />
+            <div className="flex flex-wrap gap-3">
+              <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                <input type="checkbox" checked={form.syncTodo} onChange={(e) => setForm((f) => ({ ...f, syncTodo: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand dark:border-slate-600" />
+                Sinkronkan dengan Todo
+              </label>
+              {editingId && form.syncTodo && (
+                <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                  <input type="checkbox" checked={form.done} onChange={(e) => setForm((f) => ({ ...f, done: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 dark:border-slate-600" />
+                  Tandai selesai
+                </label>
+              )}
+            </div>
             <button type="submit" disabled={!form.title.trim()} className="w-full rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100">
               {editingId ? 'Simpan perubahan' : 'Tambah acara'}
             </button>
@@ -397,14 +622,31 @@ export default function CalendarPage() {
             <ul className="mt-3 space-y-2">
               {selectedEvents.map((occ) => (
                 <li key={occ.key} className="flex items-start justify-between gap-2 rounded-xl bg-cream px-3 py-2.5 dark:bg-brand-800">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {fmtTime(occ.start)} · {occ.event.title}
-                      {REC_LABEL[occ.event.recurrence] ? <span className="ml-2 text-[10px] font-normal text-slate-400">{REC_LABEL[occ.event.recurrence]}</span> : null}
-                    </p>
+                <button type="button" onClick={() => openView(occ.event)} className="min-w-0 flex-1 text-left">
+                  <p className="truncate text-sm font-medium">
+                    {occ.event.done ? '✓ ' : ''}{fmtTime(occ.start)} · {occ.event.title}
+                    {REC_LABEL[occ.event.recurrence] ? <span className="ml-2 text-[10px] font-normal text-slate-400">{REC_LABEL[occ.event.recurrence]}</span> : null}
+                  </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {occ.event.performance_plan && (
+                        <span className="rounded-full bg-skyblue/20 px-2 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue">{occ.event.performance_plan.name}</span>
+                      )}
+                      {occ.event.done && (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">Selesai</span>
+                      )}
+                      {occ.event.media && <span className="text-[10px] text-slate-400">Bukti: {occ.event.media.filename}</span>}
+                      {occ.event.durasi_jam ? <span className="text-[10px] text-slate-400">{occ.event.durasi_jam} jam</span> : null}
+                    </div>
+                    {occ.event.tindak_lanjut && <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{occ.event.tindak_lanjut}</p>}
                     {occ.event.description && <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{occ.event.description}</p>}
-                  </div>
+                  </button>
                   <div className="flex shrink-0 items-center">
+                    <button type="button" aria-label="Lihat detail" onClick={() => openView(occ.event)} className="rounded-md p-1 text-slate-400 transition hover:text-brand dark:hover:text-skyblue">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    </button>
                     <button type="button" aria-label="Edit acara" onClick={() => startEdit(occ.event)} className="rounded-md p-1 text-slate-400 transition hover:text-brand dark:hover:text-skyblue">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                         <path d="M12 20h9" />
