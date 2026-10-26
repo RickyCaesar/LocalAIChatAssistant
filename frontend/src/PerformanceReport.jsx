@@ -38,8 +38,7 @@ export default function PerformanceReport() {
   const [error, setError] = useState(null);
   const [newPlan, setNewPlan] = useState('');
   const [addingPlan, setAddingPlan] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editingName, setEditingName] = useState('');
+  const [editModal, setEditModal] = useState(null); // {id, name}
   const [savingPlan, setSavingPlan] = useState(false);
 
   const load = () => {
@@ -85,24 +84,18 @@ export default function PerformanceReport() {
   };
 
   const startEditPlan = (plan) => {
-    setEditingId(plan.id);
-    setEditingName(plan.name);
+    setEditModal({ id: plan.id, name: plan.name });
     setError(null);
   };
 
-  const cancelEditPlan = () => {
-    setEditingId(null);
-    setEditingName('');
-  };
-
-  const saveEditPlan = async () => {
-    if (!editingId || !editingName.trim()) return;
+  const saveEditPlan = async (e) => {
+    e?.preventDefault();
+    if (!editModal?.name?.trim()) return;
     setSavingPlan(true);
     setError(null);
     try {
-      await api(`/api/performance/plans/${editingId}`, { method: 'PUT', body: JSON.stringify({ name: editingName.trim() }) });
-      setEditingId(null);
-      setEditingName('');
+      await api(`/api/performance/plans/${editModal.id}`, { method: 'PUT', body: JSON.stringify({ name: editModal.name.trim() }) });
+      setEditModal(null);
       load();
     } catch (err) {
       setError(err.message);
@@ -224,24 +217,7 @@ export default function PerformanceReport() {
                   {(data?.plans || []).map((plan) => (
                     <tr key={plan.id}>
                       <td className="px-4 py-2.5 font-medium">
-                        {editingId === plan.id ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              value={editingName}
-                              onChange={(e) => setEditingName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') saveEditPlan();
-                                if (e.key === 'Escape') cancelEditPlan();
-                              }}
-                              className={`${input} py-1`}
-                              maxLength={100}
-                            />
-                            <button type="button" disabled={savingPlan} onClick={saveEditPlan} className="text-xs font-medium text-emerald-600 disabled:opacity-40">Simpan</button>
-                            <button type="button" disabled={savingPlan} onClick={cancelEditPlan} className="text-xs text-slate-400">Batal</button>
-                          </div>
-                        ) : (
-                          <button type="button" onClick={() => startEditPlan(plan)} className="text-left hover:underline">{plan.name}</button>
-                        )}
+                        <button type="button" onClick={() => startEditPlan(plan)} className="text-left hover:underline">{plan.name}</button>
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{plan.activities}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(plan.hours)}</td>
@@ -302,6 +278,35 @@ export default function PerformanceReport() {
             </div>
           </div>
         </>
+      )}
+
+      {editModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+              <h3 className="text-sm font-semibold">Edit Indikator Kinerja</h3>
+              <button type="button" onClick={() => setEditModal(null)} className="text-xs text-slate-400 hover:text-slate-900 dark:hover:text-white">Tutup</button>
+            </div>
+            <form onSubmit={saveEditPlan} className="px-4 py-4 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Nama Indikator</label>
+                <input
+                  value={editModal.name}
+                  onChange={(e) => setEditModal((m) => ({ ...m, name: e.target.value }))}
+                  className={`mt-1 w-full ${input}`}
+                  maxLength={100}
+                  autoFocus
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={() => setEditModal(null)} className="rounded-xl px-3 py-2 text-sm">Batal</button>
+                <button type="submit" disabled={savingPlan || !editModal.name.trim()} className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-slate-900">
+                  {savingPlan ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
