@@ -43,6 +43,11 @@ $oldDark = Setting::get('theme_dark');
 $error = null;
 
 try {
+    [$status] = $call('POST', '/api/register', null, ['name' => 'Check', 'email' => 'register-check@local.test', 'password' => 'secret123']);
+    if ($status !== 404) {
+        $fail('registrasi publik masih terbuka');
+    }
+
     $email = 'profile-check-'.bin2hex(random_bytes(4)).'@local.test';
     $user = User::create([
         'name' => 'Check',

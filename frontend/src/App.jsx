@@ -11,6 +11,7 @@ import Gallery from './Gallery.jsx';
 import Settings from './Settings.jsx';
 import TodoList, { TodoIcon } from './Todo.jsx';
 import CalendarPage, { CalendarIcon } from './Calendar.jsx';
+import PerformanceReport, { ReportIcon } from './PerformanceReport.jsx';
 import Transcribe from './Transcribe.jsx';
 import Notulensi from './Notulensi.jsx';
 import Convert from './Convert.jsx';
@@ -517,6 +518,7 @@ const PAGE_GROUP = {
   gallery: 'utama',
   todos: 'utama',
   calendar: 'utama',
+  performance: 'utama',
   transcribe: 'alat',
   notulensi: 'alat',
   convert: 'alat',
@@ -1245,6 +1247,13 @@ export default function App() {
                 label="Kalender"
                 rail={rail}
               />
+              <NavButton
+                active={page === 'performance'}
+                onClick={() => setPage('performance')}
+                icon={<ReportIcon />}
+                label="Laporan Kinerja"
+                rail={rail}
+              />
             </div>
           </NavGroup>
           <div className={`mx-2 my-2 hidden border-t border-slate-200 dark:border-slate-800 ${rail ? 'lg:block' : ''}`} />
@@ -1393,8 +1402,10 @@ export default function App() {
                             ? 'Todo List'
                             : page === 'calendar'
                               ? 'Kalender'
-                              : page === 'transcribe'
-                                ? 'Transkrip Audio'
+                              : page === 'performance'
+                                ? 'Laporan Kinerja'
+                                : page === 'transcribe'
+                                  ? 'Transkrip Audio'
                                 : page === 'notulensi'
                                   ? 'Notulensi'
                                   : page === 'convert'
@@ -1644,6 +1655,8 @@ export default function App() {
               <TodoList />
             ) : page === 'calendar' ? (
               <CalendarPage />
+            ) : page === 'performance' ? (
+              <PerformanceReport />
             ) : page === 'transcribe' ? (
               <Transcribe queue={queue} refreshQueue={refreshQueue} />
             ) : page === 'notulensi' ? (

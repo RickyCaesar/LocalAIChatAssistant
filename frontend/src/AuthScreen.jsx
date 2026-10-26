@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { api, setToken } from './api.js';
 
 export default function AuthScreen({ onAuthenticated }) {
-  const [mode, setMode] = useState('login');
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -14,9 +12,7 @@ export default function AuthScreen({ onAuthenticated }) {
     setBusy(true);
     setError(null);
     try {
-      const path = mode === 'login' ? '/api/login' : '/api/register';
-      const payload = mode === 'login' ? { email, password } : { name, email, password };
-      const data = await api(path, { method: 'POST', body: JSON.stringify(payload) });
+      const data = await api('/api/login', { method: 'POST', body: JSON.stringify({ email, password }) });
       setToken(data.token);
       onAuthenticated();
     } catch (err) {
@@ -34,23 +30,13 @@ export default function AuthScreen({ onAuthenticated }) {
             H
           </div>
           <h1 className="mt-3 text-xl font-semibold">Hermes Assistant</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{mode === 'login' ? 'Masuk untuk melanjutkan' : 'Buat akun baru'}</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Masuk untuk melanjutkan</p>
         </div>
 
         <form
           onSubmit={submit}
           className="space-y-3 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-brand dark:ring-slate-700"
         >
-          {mode === 'register' && (
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Nama"
-              required
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
-            />
-          )}
           <input
             type="email"
             value={email}
@@ -67,7 +53,7 @@ export default function AuthScreen({ onAuthenticated }) {
             placeholder="Password (min. 6 karakter)"
             required
             minLength={6}
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            autoComplete="current-password"
             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
           />
 
@@ -78,22 +64,12 @@ export default function AuthScreen({ onAuthenticated }) {
             disabled={busy}
             className="w-full rounded-xl bg-brand px-3 py-2.5 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100"
           >
-            {busy ? 'Memproses...' : mode === 'login' ? 'Masuk' : 'Daftar'}
+            {busy ? 'Memproses...' : 'Masuk'}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
-          {mode === 'login' ? 'Belum punya akun?' : 'Sudah punya akun?'}{' '}
-          <button
-            type="button"
-            onClick={() => {
-              setMode(mode === 'login' ? 'register' : 'login');
-              setError(null);
-            }}
-            className="font-medium text-slate-900 underline dark:text-white"
-          >
-            {mode === 'login' ? 'Daftar di sini' : 'Masuk di sini'}
-          </button>
+          Belum punya akun? Minta admin menambahkannya lewat menu Pengguna.
         </p>
       </div>
     </div>

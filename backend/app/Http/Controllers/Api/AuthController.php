@@ -10,34 +10,6 @@ use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
-    {
-        if (User::query()->exists()) {
-            return response()->json(['error' => 'Pendaftaran ditutup. Minta admin membuat akun di menu Pengguna.'], 403);
-        }
-
-        $data = $request->validate([
-            'name' => 'required|string|max:100',
-            'email' => 'required|email|max:190|unique:users,email',
-            'password' => 'required|string|min:6',
-        ]);
-
-        // shortcut: akun pertama menjadi admin; gunakan invite/CLI bootstrap
-        // kalau pendaftaran pertama bisa diperebutkan.
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'api_token' => Str::random(64),
-            'is_admin' => true,
-        ]);
-
-        return response()->json([
-            'token' => $user->api_token,
-            'user' => ['name' => $user->name, 'email' => $user->email, 'is_admin' => $user->is_admin],
-        ], 201);
-    }
-
     public function login(Request $request)
     {
         $data = $request->validate([

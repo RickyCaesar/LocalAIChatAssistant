@@ -18,8 +18,9 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen sesuai pola Dinas Pendidikan Kaltim (kop, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan) — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery.
 - **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
-- **Todo List**: prioritas (tinggi/sedang/rendah), catatan, edit inline, due date + jam, filter Semua/Aktif/Selesai.
-- **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang (mingguan/bulanan/tahunan), edit/hapus. Bisa juga dikendalikan dari chat.
+- **Todo e-SAKIP**: prioritas, catatan, due date + jam, durasi, tindak lanjut, bukti dari Gallery, dan 5 indikator (Anggaran Kas, Lapkin, Kemiskinan/Realisasi, DSSD, Geospasial). Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
+- **Kalender e-SAKIP**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang, filter per indikator, status selesai, serta edit tindak lanjut/bukti langsung dari acara tertaut. Bisa juga dikendalikan dari chat.
+- **Laporan Kinerja Bulanan**: matriks kegiatan/jam/bukti per indikator, total bulanan, template “Penginputan DSSD Bulanan” dan “Penyusunan Laporan Realisasi Fisik & Keuangan”, lalu **generate DOCX** berisi ringkasan, matriks, dan rincian kegiatan.
 - **Pengaturan**: timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau) yang **berlaku untuk semua pengguna**. Model AI tidak diatur di sini: aplikasi selalu memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes.
 - **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent.
 - **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik — termasuk **kartu kuota/kredit Hermes**, Kelola Pengguna, Skill, Settings).
@@ -61,7 +62,13 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
    docker compose up -d --build
    ```
 
-4. Akses aplikasi:
+4. Buat admin pertama (tidak ada registrasi publik):
+
+   ```bash
+   docker compose exec backend php artisan app:create-admin
+   ```
+
+5. Akses aplikasi:
    - **Frontend (desktop):** http://localhost:5173 — mikrofon tetap jalan karena `localhost` termasuk secure context.
    - **Frontend (HP, satu Wi-Fi):** https://<IP-Windows>:5174 — wajib HTTPS; lihat *Akses dari HP & sertifikat*.
    - **Backend API:** http://localhost:8000
@@ -254,7 +261,7 @@ Perekaman mikrofon butuh **secure context**: `localhost` atau HTTPS — dari HP 
 
 ## Akun & Peran
 
-- Registrasi publik hanya untuk akun pertama (otomatis menjadi **admin**); setelah itu `/api/register` ditutup dan admin menambah akun lewat menu **Pengguna**. Login tetap terbuka di `/api/login`.
+- Tidak ada registrasi publik. Admin menambah akun lewat menu **Pengguna**; untuk instalasi baru, buat admin pertama dengan `docker compose exec backend php artisan app:create-admin`. Login tetap terbuka di `/api/login`.
 - Autentikasi memakai **Bearer token** (disimpan di `localStorage` frontend); hanya URL `/api/media/` yang membawa token via query `?auth=` karena `<img>`/`<iframe>` tidak bisa mengirim header. URL eksternal tidak diberi token.
 - **Admin** (kolom `is_admin`) mendapat menu tambahan: Dashboard, Pengguna, Skill, Settings.
 - **Menu profil** (foto/initial di header) membuka **Pengaturan akun** (ubah nama, email, password sendiri lewat `PUT /api/profile`; ganti password wajib menyertakan password saat ini) dan **Keluar**.
@@ -265,7 +272,7 @@ Perekaman mikrofon butuh **secure context**: `localhost` atau HTTPS — dari HP 
 ```
 backend/            Laravel API
   .env.example                contoh konfigurasi (salin ke .env)
-  app/Http/Controllers/Api/   Auth, Chat, Media, Queue, Todo, Event, User, Skill, AI, Notification
+  app/Http/Controllers/Api/   Auth, Chat, Media, Queue, Todo, Event, PerformanceReport, User, Skill, AI, Notification
   app/Jobs/RunTask.php        job antrean generik (convert / transcribe / notulensi / pptx)
   app/Models/Task.php         status, progress & hasil tiap tugas antrean
   app/Support/Eta.php         rumus estimasi selesai (elapsed/progress)
@@ -273,6 +280,8 @@ backend/            Laravel API
   app/Support/                FilePreview (ekstraksi teks/OCR), ActionRunner (aksi dari chat),
                               DocumentBuilder (penulis XLSX minimal untuk DOC_BUILD),
                               NotulenBuilder (penulis DOCX notulen untuk NOTULEN_BUILD),
+                              PerformanceReportBuilder (DOCX laporan kinerja e-SAKIP),
+                              TodoEventSync (sinkronisasi dua arah Todo ↔ Kalender),
                               MarpGenerator (Marp Markdown → PPTX via marp-cli + Chromium),
                               NotificationService (notifikasi in-app dari task antrean)
   resources/marp/notebook.css tema Marp (variabel warna di-inject dari pilihan tema)
@@ -282,11 +291,12 @@ backend/            Laravel API
   tests/notulen_builder_check.php  self-check penulis DOCX notulen (php, tanpa framework)
   tests/eta_check.php         self-check rumus ETA (php, tanpa framework)
   tests/profile_check.php     self-check endpoint profil + proteksi settings (php, butuh DB)
+  tests/performance_check.php self-check sinkronisasi Todo/Kalender, template, matriks & DOCX e-SAKIP (php, butuh DB)
   tests/timezone_check.php    self-check WITA: konteks Hermes, "besok", konversi ISO client (php, butuh DB)
   routes/api.php              definisi endpoint
 frontend/           React + Vite + Tailwind
   src/App.jsx                 shell, navigasi sidebar, chat, polling antrean global
-  src/*.jsx                   Gallery, Todo, Calendar, Transcribe, Convert, Presentasi, Notulensi, Queue, Skills, Settings, Users, Dashboard, Profile (akun), Notifications (lonceng + toast)
+  src/*.jsx                   Gallery, Todo, Calendar, PerformanceReport, Transcribe, Convert, Presentasi, Notulensi, Queue, Skills, Settings, Users, Dashboard, Profile (akun), Notifications (lonceng + toast)
   src/holidays.js             helper hari libur Indonesia (date-holidays)
   src/time.js                 helper format jam WITA (dipakai bubble chat & riwayat antrean)
   src/theme.css               override utilitas Tailwind agar memakai variabel tema (diimpor setelah index.css)
@@ -296,9 +306,9 @@ docker-compose.yml
 
 ## Endpoint API (ringkas)
 
-Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token. `POST /api/register` hanya menerima akun pertama; berikutnya 403.
+Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 
-- **Auth:** `POST /api/register`, `POST /api/login`, `GET /api/me`, `PUT /api/profile` (nama/email/password sendiri), `POST /api/logout`
+- **Auth:** `POST /api/login`, `GET /api/me`, `PUT /api/profile` (nama/email/password sendiri), `POST /api/logout`
 - **Sessions:** `GET|POST /api/sessions`, `PUT|DELETE /api/sessions/{id}`
 - **Chat:** `POST /api/chat` (streaming SSE)
 - **Media:** `GET|POST /api/media`, `GET|DELETE /api/media/{id}` (pratinjau inline; `?download=1` untuk unduh), `POST /api/media/{id}/pdf` (konversi berkas ke PDF)
@@ -306,8 +316,9 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token. `POST /
 - **Presentasi:** `POST /api/presentations` (Marp Markdown → PPTX, **asinkron**), `POST /api/presentations/draft` (AI menyusun draft Marp Markdown)
 - **Notifikasi:** `GET /api/notifications` (`?after=<id>` untuk yang lebih baru; sekaligus mengembalikan `unread`), `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all`
 - **Suara (TTS/STT):** `GET /api/tts/voices` (daftar model suara), `POST /api/tts` (`{text, voice?, speed?}` → `audio/wav`), `POST /api/stt` (unggah audio → `{text, language}`, sinkron untuk Mode Suara)
-- **Todo:** `GET|POST /api/todos`, `PUT|DELETE /api/todos/{id}`
+- **Todo:** `GET|POST /api/todos`, `POST /api/todos/{id}/complete`, `PUT|DELETE /api/todos/{id}`
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
+- **Laporan Kinerja:** `GET /api/performance/plans`, `GET|POST /api/performance/report` (`?month=YYYY-MM`), `POST /api/performance/templates/{key}`
 - **Settings:** `GET /api/settings` (semua user), `POST /api/settings` (**admin**)
 - **Admin:** `GET /api/analytics`, `GET /api/skills`, `GET|POST /api/users`, `PUT|DELETE /api/users/{id}`
 
@@ -315,6 +326,7 @@ Semua `/api/*` (kecuali `register`/`login`/`health`) butuh Bearer token. `POST /
 
 - Transkripsi, konversi video→MP3, dan notulensi AI diproses **asinkron di antrean** oleh container `queue-worker`; STT tetap di CPU (mode `int8`) sehingga model besar terasa lambat, tetapi tidak lagi memblokir request lain. Satu worker = antrean berurutan, jadi tugas kedua menunggu yang pertama selesai.
 - Persentase progres transkripsi/konversi berasal dari posisi segmen/frame terhadap durasi berkas; untuk notulensi AI, persentase adalah estimasi berbasis waktu (konstanta throughput di `RunTask::runNotulensiStream`, bisa dikalibrasi).
+- Laporan Kinerja menghitung Todo ber-indikator dan acara Kalender ber-indikator yang belum tertaut Todo (yang tertaut dihitung sekali lewat Todo). Kegiatan tanpa indikator tidak masuk matriks. Template bulanan dibuat pada tanggal 1 pukul 09:00 dan dapat dibuat ulang bila tombolnya diklik lagi.
 - OCR dan ekstraksi teks (gambar/dokumen) masih dilakukan **sinkron saat unggah**; berkas besar atau deck banyak slide bisa membuat unggahan lambat.
 - `php artisan serve` berjalan dengan `PHP_CLI_SERVER_WORKERS=4` (fork bawaan PHP), jadi satu request berat yang belum dipindah ke antrean tidak membekukan healthcheck/API — sisanya menunggu worker kosong. Cukup untuk pemakaian lokal. Laravel hanya mengaktifkan ini dengan flag `--no-reload` (lihat `Dockerfile`); konsekuensinya, mengubah `backend/.env` butuh restart container, bukan auto-reload.
 - Server dan `queue-worker` berbagi **satu file SQLite** yang di-mount sebagai file tunggal; karena itu mode jurnal dipaksa `delete` (bukan WAL) + `busy_timeout` 5s agar tidak "database is locked". Untuk konkurensi lebih berat, pindahkan DB ke direktori bersama (agar WAL bisa dipakai) atau ke Postgres.

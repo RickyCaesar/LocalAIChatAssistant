@@ -22,6 +22,10 @@ export default function Users() {
   const [notice, setNotice] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
+  const [editUser, setEditUser] = useState(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editError, setEditError] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = async () => {
     setError(null);
@@ -67,16 +71,27 @@ export default function Users() {
     }
   };
 
-  const resetPassword = async (u) => {
-    const password = window.prompt(`Password baru untuk ${u.email} (min. 6 karakter):`);
-    if (!password) return;
-    setError(null);
-    setNotice(null);
+  const openEdit = (u) => {
+    setEditUser(u);
+    setEditForm({ name: u.name || '', email: u.email, password: '' });
+    setEditError(null);
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    setSavingEdit(true);
+    setEditError(null);
     try {
-      await api(`/api/users/${u.id}`, { method: 'PUT', body: JSON.stringify({ password }) });
-      setNotice(`Password ${u.email} diperbarui.`);
+      const payload = { name: editForm.name, email: editForm.email };
+      if (editForm.password) payload.password = editForm.password;
+      await api(`/api/users/${editUser.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      setEditUser(null);
+      setNotice(`Akun ${editForm.email} diperbarui.`);
+      await load();
     } catch (err) {
-      setError(err.message);
+      setEditError(err.message);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -189,10 +204,10 @@ export default function Users() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => resetPassword(u)}
+                          onClick={() => openEdit(u)}
                           className="rounded-lg px-2 py-1 font-medium text-slate-600 hover:bg-cream dark:text-slate-300 dark:hover:bg-brand-600"
                         >
-                          Reset password
+                          Edit
                         </button>
                         <button
                           type="button"
@@ -210,6 +225,94 @@ export default function Users() {
           </div>
         )}
       </div>
+
+      {editUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => !savingEdit && setEditUser(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && !savingEdit) setEditUser(null);
+          }}
+        >
+          <form
+            onSubmit={saveEdit}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-user-title"
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-brand-900"
+          >
+            <h3 id="edit-user-title" className="text-base font-semibold">Edit pengguna</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{editUser.email}</p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="edit-user-name" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                  Nama
+                </label>
+                <input
+                  id="edit-user-name"
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  required
+                  autoFocus
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-user-email" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                  Email
+                </label>
+                <input
+                  id="edit-user-email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  required
+                  autoComplete="email"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-user-password" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+                  Password baru
+                </label>
+                <input
+                  id="edit-user-password"
+                  type="password"
+                  value={editForm.password}
+                  onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                  minLength={6}
+                  autoComplete="new-password"
+                  placeholder="Kosongkan jika tidak diganti"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
+                />
+              </div>
+            </div>
+
+            {editError && <p className="mt-3 text-sm text-red-500">{editError}</p>}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditUser(null)}
+                disabled={savingEdit}
+                className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-cream disabled:opacity-40 dark:text-slate-300 dark:hover:bg-brand-600"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit}
+                className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100"
+              >
+                {savingEdit ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
