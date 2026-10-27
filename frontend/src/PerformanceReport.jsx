@@ -84,7 +84,15 @@ export default function PerformanceReport() {
   };
 
   const startEditPlan = (plan) => {
-    setEditModal({ id: plan.id, name: plan.name });
+    setEditModal({
+      id: plan.id,
+      name: plan.name,
+      atasan_intervensi: plan.atasan_intervensi || '',
+      rencana_kondisi: plan.rencana_kondisi || '',
+      indikator_kinerja: plan.indikator_kinerja || '',
+      satuan: plan.satuan || '',
+      target_tahunan: plan.target_tahunan || '',
+    });
     setError(null);
   };
 
@@ -94,7 +102,14 @@ export default function PerformanceReport() {
     setSavingPlan(true);
     setError(null);
     try {
-      await api(`/api/performance/plans/${editModal.id}`, { method: 'PUT', body: JSON.stringify({ name: editModal.name.trim() }) });
+      await api(`/api/performance/plans/${editModal.id}`, { method: 'PUT', body: JSON.stringify({
+        name: editModal.name.trim(),
+        atasan_intervensi: editModal.atasan_intervensi?.trim() || null,
+        rencana_kondisi: editModal.rencana_kondisi?.trim() || null,
+        indikator_kinerja: editModal.indikator_kinerja?.trim() || null,
+        satuan: editModal.satuan?.trim() || null,
+        target_tahunan: editModal.target_tahunan?.trim() || null,
+      }) });
       setEditModal(null);
       load();
     } catch (err) {
@@ -198,34 +213,56 @@ export default function PerformanceReport() {
           </div>
 
           <div className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-              <h3 className="text-sm font-semibold">Matriks {data?.month_label}</h3>
-              <span className="text-xs text-slate-400">Hanya kegiatan ber-indikator dan bertanggal bulan ini.</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-sm">
-                <thead className="bg-cream text-[11px] uppercase tracking-wide text-slate-500 dark:bg-brand-800 dark:text-slate-400">
-                  <tr>
-                    <th className="px-4 py-2 font-semibold">Indikator</th>
-                    <th className="px-3 py-2 text-right font-semibold">Kegiatan</th>
-                    <th className="px-3 py-2 text-right font-semibold">Jam</th>
-                    <th className="px-3 py-2 text-right font-semibold">Bukti</th>
-                    <th className="px-4 py-2 text-right font-semibold">Selesai</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {(data?.plans || []).map((plan) => (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+            <h3 className="text-sm font-semibold">Matriks e-SAKIP {data?.month_label} (WITA)</h3>
+            <span className="text-xs text-slate-400">Pratinjau lengkap sesuai struktur e-SAKIP.</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-left text-sm">
+              <thead className="bg-cream text-[10px] uppercase tracking-wide text-slate-500 dark:bg-brand-800 dark:text-slate-400">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">No</th>
+                  <th className="px-3 py-2 font-semibold">Atasan Langsung / Rencana Intervensi</th>
+                  <th className="px-3 py-2 font-semibold">Sasaran Strategis / Kondisi yang Diwujudkan</th>
+                  <th className="px-3 py-2 font-semibold">Indikator Kinerja & Satuan</th>
+                  <th className="px-3 py-2 font-semibold">Target / Realisasi</th>
+                  <th className="px-3 py-2 font-semibold">Rincian Kegiatan, Jam, Tindak Lanjut</th>
+                  <th className="px-3 py-2 font-semibold">Penanggung Jawab (Nama & Jabatan)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {(data?.plans || []).map((plan, idx) => {
+                  const pj = [plan.penanggung_jawab_nama, plan.penanggung_jawab_jabatan].filter(Boolean).join(' - ') || '-';
+                  const indikator = [plan.indikator_kinerja || plan.name, plan.satuan ? `(${plan.satuan})` : null].filter(Boolean).join(' ');
+                  const targetRealisasi = `Target: ${plan.target_tahunan || '-'} | Realisasi: ${plan.done || 0} kegiatan / ${fmtNum(plan.hours)} jam`;
+                  return (
                     <tr key={plan.id}>
-                      <td className="px-4 py-2.5 font-medium">
-                        <button type="button" onClick={() => startEditPlan(plan)} className="text-left hover:underline">{plan.name}</button>
+                      <td className="px-3 py-2.5 align-top">{idx + 1}</td>
+                      <td className="px-3 py-2.5 align-top whitespace-pre-wrap">{plan.atasan_intervensi || '-'}</td>
+                      <td className="px-3 py-2.5 align-top whitespace-pre-wrap">{plan.rencana_kondisi || '-'}</td>
+                      <td className="px-3 py-2.5 align-top whitespace-pre-wrap">
+                        <button type="button" onClick={() => startEditPlan(plan)} className="text-left hover:underline">{indikator || '-'}</button>
                       </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{plan.activities}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(plan.hours)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{plan.evidence}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{plan.done}</td>
+                      <td className="px-3 py-2.5 align-top whitespace-pre-wrap">{targetRealisasi}</td>
+                      <td className="px-3 py-2.5 align-top">
+                        {plan.activities_detail?.length ? (
+                          <ul className="space-y-1">
+                            {plan.activities_detail.map((ad, i) => (
+                              <li key={i} className="text-xs">
+                                <span className="font-medium">- {ad.title}</span> ({ad.at}, {ad.hours} jam, {ad.done ? 'Selesai' : 'Aktif'})
+                                {ad.tindak_lanjut ? <div className="pl-2 text-slate-500 dark:text-slate-400">TL: {ad.tindak_lanjut}</div> : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 align-top whitespace-pre-wrap">{pj}</td>
                     </tr>
-                  ))}
-                </tbody>
+                  );
+                })}
+              </tbody>
                 <tfoot className="bg-cream/70 font-semibold dark:bg-brand-800/60">
                   <tr>
                     <td className="px-4 py-2.5">Total</td>
@@ -282,23 +319,37 @@ export default function PerformanceReport() {
 
       {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
+          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-              <h3 className="text-sm font-semibold">Edit Indikator Kinerja</h3>
+              <h3 className="text-sm font-semibold">Edit Matriks e-SAKIP</h3>
               <button type="button" onClick={() => setEditModal(null)} className="text-xs text-slate-400 hover:text-slate-900 dark:hover:text-white">Tutup</button>
             </div>
-            <form onSubmit={saveEditPlan} className="px-4 py-4 space-y-3">
-              <div>
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Nama Indikator</label>
-                <input
-                  value={editModal.name}
-                  onChange={(e) => setEditModal((m) => ({ ...m, name: e.target.value }))}
-                  className={`mt-1 w-full ${input}`}
-                  maxLength={100}
-                  autoFocus
-                />
+            <form onSubmit={saveEditPlan} className="grid gap-3 px-4 py-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Nama / Label</label>
+                <input value={editModal.name} onChange={(e) => setEditModal((m) => ({ ...m, name: e.target.value }))} className={`mt-1 w-full ${input}`} maxLength={150} />
               </div>
-              <div className="flex items-center justify-end gap-2">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Atasan Langsung / Rencana Intervensi</label>
+                <textarea value={editModal.atasan_intervensi} onChange={(e) => setEditModal((m) => ({ ...m, atasan_intervensi: e.target.value }))} rows={2} className={`mt-1 w-full resize-none ${input}`} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Sasaran Strategis / Kondisi yang Diwujudkan</label>
+                <textarea value={editModal.rencana_kondisi} onChange={(e) => setEditModal((m) => ({ ...m, rencana_kondisi: e.target.value }))} rows={2} className={`mt-1 w-full resize-none ${input}`} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Indikator Kinerja (Ukuran Keberhasilan)</label>
+                <textarea value={editModal.indikator_kinerja} onChange={(e) => setEditModal((m) => ({ ...m, indikator_kinerja: e.target.value }))} rows={2} className={`mt-1 w-full resize-none ${input}`} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Satuan</label>
+                <input value={editModal.satuan} onChange={(e) => setEditModal((m) => ({ ...m, satuan: e.target.value }))} className={`mt-1 w-full ${input}`} placeholder="Dokumen/Laporan/Data" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Target Tahunan</label>
+                <input value={editModal.target_tahunan} onChange={(e) => setEditModal((m) => ({ ...m, target_tahunan: e.target.value }))} className={`mt-1 w-full ${input}`} />
+              </div>
+              <div className="sm:col-span-2 flex items-center justify-end gap-2">
                 <button type="button" onClick={() => setEditModal(null)} className="rounded-xl px-3 py-2 text-sm">Batal</button>
                 <button type="submit" disabled={savingPlan || !editModal.name.trim()} className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-slate-900">
                   {savingPlan ? 'Menyimpan...' : 'Simpan'}
