@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, API_URL, clearToken, apiUpload, mediaUrl, mediaSrc, streamChat, apiQueue, apiQueueCancel, apiNotifications, apiNotificationRead, apiNotificationsReadAll, apiStt } from './api.js';
 import { speak, stopSpeech, startRecording } from './speech.js';
+import { confirmAction } from './feedback.js';
 import { getMediaById, refreshMedia } from './mediaStore.js';
 import AuthScreen from './AuthScreen.jsx';
 import Dashboard from './Dashboard.jsx';
@@ -861,7 +862,13 @@ export default function App() {
   const activeCount = queue.filter((t) => t.status === 'queued' || t.status === 'processing').length;
   const runningTask = queue.find((t) => t.status === 'processing');
 
-  const cancelTask = (id) => {
+  const cancelTask = async (id) => {
+    const ok = await confirmAction({
+      title: 'Konfirmasi Tindakan',
+      message: 'Batalkan atau hapus tugas ini dari riwayat?',
+      confirmLabel: 'Ya',
+    });
+    if (!ok) return;
     apiQueueCancel(id).then(refreshQueue).catch(() => {});
   };
 
@@ -948,6 +955,7 @@ export default function App() {
     api(`/api/sessions/${session.id}`, {
       method: 'PUT',
       body: JSON.stringify({ title: session.title || 'New chat', messages: session.messages }),
+      silent: true,
     }).catch(() => {});
   };
 
@@ -972,7 +980,7 @@ export default function App() {
 
   const newSession = () => {
     setInput('');
-    api('/api/sessions', { method: 'POST' })
+    api('/api/sessions', { method: 'POST', silent: true })
       .then((session) => {
         setSessions((prev) => [...prev, session]);
         setActiveId(session.id);
@@ -985,9 +993,14 @@ export default function App() {
     setSidebarOpen(false);
   };
 
-  const removeSession = (id) => {
-    if (!window.confirm('Hapus percakapan ini? Media di Gallery tetap tersimpan.')) return;
-    api(`/api/sessions/${id}`, { method: 'DELETE' }).catch(() => {});
+  const removeSession = async (id) => {
+    const ok = await confirmAction({
+      title: 'Hapus Percakapan',
+      message: 'Hapus percakapan ini? Media di Gallery tetap tersimpan.',
+      confirmLabel: 'Ya, hapus',
+    });
+    if (!ok) return;
+    api(`/api/sessions/${id}`, { method: 'DELETE', success: 'Percakapan berhasil dihapus.' }).catch(() => {});
     setSessions((prev) => prev.filter((s) => s.id !== id));
     if (activeId === id) {
       const next = sessionsRef.current.filter((s) => s.id !== id);

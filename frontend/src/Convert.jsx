@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiQueueConvert, mediaSrc } from './api.js';
+import { showSuccess } from './feedback.js';
 import { ProgressBar, formatEta } from './Queue.jsx';
 
 const STORE_KEY = 'task-convert';
@@ -33,6 +34,7 @@ export default function Convert({ queue = [], refreshQueue }) {
       setTaskId(job.id);
       localStorage.setItem(STORE_KEY, job.id);
       refreshQueue?.();
+      showSuccess('Konversi berhasil masuk antrean.');
     } catch (e) {
       setError(e.message);
     }

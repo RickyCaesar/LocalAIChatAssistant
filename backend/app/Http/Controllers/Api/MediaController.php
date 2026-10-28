@@ -33,10 +33,14 @@ class MediaController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'image' => 'required|file|max:'.((int) Setting::get('max_upload_mb', 20) * 1024),
+            'image' => 'nullable|file|max:'.((int) Setting::get('max_upload_mb', 50) * 1024),
+            'file' => 'nullable|file|max:'.((int) Setting::get('max_upload_mb', 50) * 1024),
         ]);
 
-        $file = $request->file('image');
+        $file = $request->file('file') ?? $request->file('image');
+        if (! $file) {
+            return response()->json(['error' => 'File wajib diunggah.'], 422);
+        }
         $ext = preg_replace('/[^a-z0-9]/', '', strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin'));
         $path = $file->storeAs('media/'.auth()->id(), Str::uuid().'.'.$ext, 'local');
 

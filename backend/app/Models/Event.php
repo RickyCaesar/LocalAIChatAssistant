@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Event extends Model
 {
@@ -11,6 +12,7 @@ class Event extends Model
         'user_id',
         'todo_id',
         'media_id',
+        'media_ids',
         'performance_plan_id',
         'title',
         'start_at',
@@ -26,6 +28,7 @@ class Event extends Model
         'start_at' => 'datetime',
         'end_at' => 'datetime',
         'durasi_jam' => 'float',
+        'media_ids' => 'array',
     ];
 
     protected static function booted(): void
@@ -49,6 +52,7 @@ class Event extends Model
             $todo->title = $event->title;
             $todo->tindak_lanjut = $event->tindak_lanjut;
             $todo->media_id = $event->media_id;
+            $todo->media_ids = $event->media_ids;
             $todo->performance_plan_id = $event->performance_plan_id;
 
             if ($event->wasChanged('start_at')) {
@@ -85,5 +89,10 @@ class Event extends Model
     public function performancePlan(): BelongsTo
     {
         return $this->belongsTo(PerformancePlan::class);
+    }
+
+    public function performancePlans(): BelongsToMany
+    {
+        return $this->belongsToMany(PerformancePlan::class, 'performance_plan_event');
     }
 }

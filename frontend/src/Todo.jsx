@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, mediaSrc } from './api.js';
+import { confirmAction } from './feedback.js';
 
 const PRIORITIES = [
   { value: 'tinggi', label: 'Tinggi' },
@@ -28,6 +29,50 @@ const fmtDue = (iso) =>
 const input =
   'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue';
 
+function MultiSelect({ options, value = [], onChange, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  const selected = options.filter((o) => value.includes(o.value));
+  const toggle = (v) => {
+    const set = new Set(value);
+    if (set.has(v)) set.delete(v); else set.add(v);
+    onChange(Array.from(set));
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return (
+    <div ref={box} className="relative sm:col-span-2">
+      <button type="button" onClick={() => setOpen((o) => !o)} className={`flex w-full items-center justify-between gap-2 text-left ${input}`}>
+        <span className={`truncate ${selected.length ? '' : 'text-slate-400'}`}>
+          {selected.length
+            ? `${selected.length > 1 ? `${selected.length} dipilih · ` : ''}${selected.map((s) => s.label).join(', ')}`
+            : placeholder}
+        </span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`h-4 w-4 shrink-0 transition ${open ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-brand-900">
+          <div className="max-h-56 overflow-auto p-1">
+            {options.length === 0 && <p className="px-2 py-2 text-xs text-slate-400">Belum ada indikator. Tambahkan di Laporan Kinerja.</p>}
+            {options.map((o) => (
+              <label key={o.value} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-brand-800">
+                <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)} className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand focus:ring-brand dark:border-slate-600" />
+                <span className="min-w-0 break-words">{o.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TodoIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -47,7 +92,8 @@ const blank = {
   notes: '',
   durasiJam: '',
   performancePlanId: '',
-  mediaId: '',
+  performancePlanIds: [],
+  mediaItems: [],
   tindakLanjut: '',
   syncCalendar: false,
 };
@@ -59,7 +105,9 @@ const payload = (form, extra = {}) => ({
   notes: form.notes.trim() || null,
   durasi_jam: form.durasiJam === '' ? null : Number(form.durasiJam),
   performance_plan_id: form.performancePlanId || null,
-  media_id: form.mediaId || null,
+  performance_plan_ids: Array.isArray(form.performancePlanIds) ? form.performancePlanIds.map(Number) : [],
+  media_id: form.mediaItems?.[0]?.id || null,
+  media_ids: (form.mediaItems || []).map((m) => m.id),
   tindak_lanjut: form.tindakLanjut.trim() || null,
   sync_calendar: Boolean(form.syncCalendar),
   ...extra,
@@ -99,7 +147,7 @@ export default function TodoList() {
     e.preventDefault();
     if (!form.title.trim()) return;
     try {
-      const res = await api('/api/todos', { method: 'POST', body: JSON.stringify(payload(form)) });
+      const res = await api('/api/todos', { method: 'POST', body: JSON.stringify(payload(form)), success: 'Todo berhasil ditambahkan.' });
       setTodos((prev) => [...prev, res.todo]);
       setForm(blank);
     } catch (e2) {
@@ -110,8 +158,8 @@ export default function TodoList() {
   const toggle = async (todo) => {
     try {
       const res = todo.done
-        ? await api(`/api/todos/${todo.id}`, { method: 'PUT', body: JSON.stringify({ done: false }) })
-        : await api(`/api/todos/${todo.id}/complete`, { method: 'POST', body: JSON.stringify({}) });
+        ? await api(`/api/todos/${todo.id}`, { method: 'PUT', body: JSON.stringify({ done: false }), success: 'Todo dibuka kembali.' })
+        : await api(`/api/todos/${todo.id}/complete`, { method: 'POST', body: JSON.stringify({}), success: 'Todo ditandai selesai.' });
       setTodos((prev) => prev.map((t) => (t.id === todo.id ? res.todo : t)));
     } catch (e) {
       setError(e.message);
@@ -119,6 +167,9 @@ export default function TodoList() {
   };
 
   const openEdit = (todo) => {
+    const planIds = Array.isArray(todo.performance_plan_ids) && todo.performance_plan_ids.length
+      ? todo.performance_plan_ids.map(String)
+      : (todo.performance_plan_id ? [String(todo.performance_plan_id)] : []);
     setEditing({
       id: todo.id,
       title: todo.title,
@@ -126,8 +177,9 @@ export default function TodoList() {
       priority: todo.priority || 'sedang',
       notes: todo.notes || '',
       durasiJam: todo.durasi_jam ?? '',
-      performancePlanId: todo.performance_plan_id ?? '',
-      mediaId: todo.media_id ?? '',
+      performancePlanId: planIds[0] || '',
+      performancePlanIds: planIds,
+      mediaItems: todo.media_items?.length ? todo.media_items : (todo.media ? [todo.media] : []),
       tindakLanjut: todo.tindak_lanjut || '',
       syncCalendar: Boolean(todo.event_id),
     });
@@ -137,7 +189,7 @@ export default function TodoList() {
     e.preventDefault();
     if (!editing.title.trim()) return;
     try {
-      const res = await api(`/api/todos/${editing.id}`, { method: 'PUT', body: JSON.stringify(payload(editing)) });
+      const res = await api(`/api/todos/${editing.id}`, { method: 'PUT', body: JSON.stringify(payload(editing)), success: 'Perubahan todo berhasil disimpan.' });
       setTodos((prev) => prev.map((x) => (x.id === editing.id ? res.todo : x)));
       setEditing(null);
     } catch (e2) {
@@ -146,9 +198,14 @@ export default function TodoList() {
   };
 
   const remove = async (todo) => {
-    if (!window.confirm('Hapus todo ini? Acara kalender yang tertaut juga dihapus.')) return;
+    const ok = await confirmAction({
+      title: 'Hapus Todo',
+      message: 'Hapus todo ini? Acara kalender yang tertaut juga akan dihapus.',
+      confirmLabel: 'Ya, hapus',
+    });
+    if (!ok) return;
     try {
-      await api(`/api/todos/${todo.id}`, { method: 'DELETE' });
+      await api(`/api/todos/${todo.id}`, { method: 'DELETE', success: 'Todo berhasil dihapus.' });
       setTodos((prev) => prev.filter((t) => t.id !== todo.id));
     } catch (e) {
       setError(e.message);
@@ -166,20 +223,31 @@ export default function TodoList() {
     { key: 'selesai', label: `Selesai (${todos.length - open})` },
   ];
 
-  const metaFields = (value, set) => (
+  const metaFields = (value, set) => {
+    const uploadFiles = async (files) => {
+      const list = Array.from(files || []);
+      if (!list.length) return;
+      setError?.(null);
+      for (const file of list) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await api('/api/media', { method: 'POST', body: fd, silent: true });
+        set((f) => ({ ...f, mediaItems: [...(f.mediaItems || []), { id: res.id, filename: res.filename, mime: res.mime }] }));
+      }
+    };
+
+    return (
     <>
       <div className="grid gap-2 sm:grid-cols-2">
-        <select
-          aria-label="Indikator e-SAKIP"
-          value={value.performancePlanId}
-          onChange={(e) => set((f) => ({ ...f, performancePlanId: e.target.value }))}
-          className={input}
-        >
-          <option value="">Indikator e-SAKIP...</option>
-          {options.plans.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+        <MultiSelect
+          options={(options.plans || []).map((p) => ({
+            value: String(p.id),
+            label: [p.indikator_kinerja || p.name, p.satuan ? `(${p.satuan})` : null].filter(Boolean).join(' '),
+          }))}
+          value={Array.isArray(value.performancePlanIds) ? value.performancePlanIds : (value.performancePlanId ? [String(value.performancePlanId)] : [])}
+          onChange={(vals) => set((f) => ({ ...f, performancePlanIds: vals, performancePlanId: vals && vals.length ? vals[0] : '' }))}
+          placeholder="Pilih Indikator Kinerja..."
+        />
         <input
           type="number"
           min="0.25"
@@ -191,27 +259,62 @@ export default function TodoList() {
           aria-label="Durasi jam"
           className={input}
         />
-        <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-          <input
-            type="file"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setError?.(null);
-              const fd = new FormData();
-              fd.append('image', file);
+        <div className="sm:col-span-2">
+          <div
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+            onDrop={async (e) => {
+              e.preventDefault();
               try {
-                const res = await api('/api/media', { method: 'POST', body: fd });
-                set((f) => ({ ...f, mediaId: res.id }));
+                await uploadFiles(e.dataTransfer.files);
               } catch (err) {
                 setError?.(err.message);
-              } finally {
-                e.target.value = '';
               }
             }}
-            className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-400 dark:file:bg-brand-800 dark:file:text-slate-200"
-          />
-          {value.mediaId && <span className="text-[11px] text-emerald-600 dark:text-emerald-300">File terlampir</span>}
+            className="group relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 bg-gradient-to-br from-slate-50 to-white px-4 py-4 text-center transition hover:border-skyblue hover:shadow-sm dark:border-slate-700 dark:from-brand-900 dark:to-brand-800 dark:hover:border-skyblue"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-skyblue/20 text-brand-700 dark:bg-brand-700 dark:text-skyblue">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" x2="12" y1="3" y2="15" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium">Seret &amp; lepas file ke sini</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">atau klik untuk memilih beberapa file</p>
+            </div>
+            <input
+              type="file"
+              multiple
+              onChange={async (e) => {
+                try {
+                  await uploadFiles(e.target.files);
+                } catch (err) {
+                  setError?.(err.message);
+                } finally {
+                  e.target.value = '';
+                }
+              }}
+              className="absolute inset-0 cursor-pointer opacity-0"
+            />
+          </div>
+          {(value.mediaItems || []).length > 0 && (
+            <ul className="mt-1 space-y-1">
+              {value.mediaItems.map((m) => (
+                <li key={m.id} className="flex items-center gap-2 text-[11px] text-emerald-600 dark:text-emerald-300">
+                  <a href={mediaSrc(`/api/media/${m.id}`)} target="_blank" rel="noreferrer" className="truncate underline">{m.filename}</a>
+                  <button
+                    type="button"
+                    aria-label={`Hapus lampiran ${m.filename}`}
+                    onClick={() => set((f) => ({ ...f, mediaItems: (f.mediaItems || []).filter((x) => x.id !== m.id) }))}
+                    className="shrink-0 text-slate-400 hover:text-blush"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       <input
@@ -232,12 +335,13 @@ export default function TodoList() {
         Tampilkan di Kalender
       </label>
     </>
-  );
+    );
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
       <h2 className="text-lg font-semibold">Todo List</h2>
-      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Tugas dan kegiatan e-SAKIP. Bisa dikelola lewat chat dengan Hermes.</p>
+      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Tugas dan kegiatan kinerja. Bisa dikelola lewat chat dengan Hermes.</p>
 
       {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
@@ -359,11 +463,11 @@ export default function TodoList() {
                   </div>
                   {todo.notes && <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{todo.notes}</p>}
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    {todo.performance_plan && (
-                      <span className="rounded-full bg-skyblue/20 px-2 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue">
-                        {todo.performance_plan.name}
+                    {(todo.performance_plans?.length ? todo.performance_plans : (todo.performance_plan ? [todo.performance_plan] : [])).map((plan) => (
+                      <span key={plan.id} className="rounded-full bg-skyblue/20 px-2 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue">
+                        {plan.indikator_kinerja || plan.name}
                       </span>
-                    )}
+                    ))}
                     {todo.event_id && (
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
                         Kalender
@@ -372,16 +476,17 @@ export default function TodoList() {
                     {todo.durasi_jam !== null && todo.durasi_jam !== undefined && (
                       <span className="text-[10px] text-slate-400">{todo.durasi_jam} jam</span>
                     )}
-                    {todo.media && (
+                    {(todo.media_items?.length ? todo.media_items : (todo.media ? [todo.media] : [])).map((m) => (
                       <a
-                        href={mediaSrc(`/api/media/${todo.media.id}`)}
+                        key={m.id}
+                        href={mediaSrc(`/api/media/${m.id}`)}
                         target="_blank"
                         rel="noreferrer"
                         className="max-w-[12rem] truncate text-[10px] font-medium text-brand underline dark:text-skyblue"
                       >
-                        {todo.media.filename}
+                        {m.filename}
                       </a>
-                    )}
+                    ))}
                   </div>
                   {todo.tindak_lanjut && <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">Hasil: {todo.tindak_lanjut}</p>}
                   {todo.due_at && (

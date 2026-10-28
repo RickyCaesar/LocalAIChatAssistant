@@ -3,78 +3,65 @@
 namespace App\Support;
 
 use App\Models\Media;
-use PhpOffice\PhpWord\IOFactory;
-use PhpOffice\PhpWord\PhpWord;
-use PhpOffice\PhpWord\SimpleType\Jc;
-use PhpOffice\PhpWord\Style\Table;
+use Illuminate\Support\Str;
 
 class PerformanceReportBuilder
 {
     public static function save(array $data, int $userId): Media
     {
-        $phpWord = new PhpWord();
-        $section = $phpWord->addSection([
-            'marginLeft' => 600,
-            'marginRight' => 600,
-            'marginTop' => 800,
-            'marginBottom' => 800,
-        ]);
-
-        $phpWord->addTitleStyle(1, ['bold' => true, 'size' => 14], ['alignment' => Jc::CENTER]);
-        $section->addTitle($data['title'] ?? 'LAPORAN KINERJA BULANAN', 1);
-        if (! empty($data['subtitle'])) {
-            $phpWord->addTitleStyle(2, ['size' => 12], ['alignment' => Jc::CENTER]);
-            $section->addTitle($data['subtitle'], 2);
+        $storagePrivate = __DIR__.'/../../storage/app/private';
+        if (! is_dir($storagePrivate)) {
+            $storagePrivate = getcwd().'/storage/app/private';
         }
-
-        $section->addTextBreak(1);
-
-        $phpWord->addTitleStyle(3, ['bold' => true, 'size' => 11]);
-        $section->addTitle('A. Ringkasan', 3);
-
-        $table = $section->addTable(['borderSize' => 6, 'borderColor' => '999999', 'cellMargin' => 80]);
-        foreach ($data['summary'] ?? [] as $row) {
-            $table->addRow();
-            $c1 = $table->addCell(4000);
-            $c1->addText($row[0], ['bold' => true]);
-            $c2 = $table->addCell(3000);
-            $c2->addText((string) $row[1]);
+        $base = $storagePrivate.'/media/'.$userId;
+        if (! is_dir($base)) {
+            @mkdir($base, 0775, true);
         }
-
-        $section->addTextBreak(1);
-        $section->addTitle('B. Matriks Kinerja Bulanan (e-SAKIP)', 3);
-        $section->addText('Integrasi Todo, Kalender, dan Laporan Kinerja berdasarkan zona waktu Asia/Makassar (WITA).', ['size' => 9, 'italic' => true]);
-
-        $section->addTextBreak(1);
-        $x = self::table($data['matrix'] ?? [], [700, 2300, 2300, 2300, 1600, 2300, 2300], true, true);
-
-        $section->addTextBreak(1);
-        $section->addTitle('C. Rincian Kegiatan', 3);
-        self::table($data['details'] ?? [], [600, 1100, 2500, 2000, 900, 900, 1900, 1500], true, false);
-
-        if (! empty($data['note'])) {
-            $section->addTextBreak(1);
-            $section->addText($data['note'], ['size' => 9, 'italic' => true]);
+        $filename = $data['filename'] ?? 'Laporan-Kinerja-'.date('Y-m').'.pdf';
+        if (substr($filename, -4) !== '.pdf') {
+            $filename .= '.pdf';
         }
-        if (! empty($data['generated_at'])) {
-            $section->addText('Dicetak pada: '.$data['generated_at'].' WITA', ['size' => 9]);
-        }
-
-        $dir = storage_path('app/private/media/'.$userId);
-        if (! is_dir($dir)) {
-            mkdir($dir, 0775, true);
-        }
-        $filename = $data['filename'] ?? 'Laporan-Kinerja-'.date('Y-m').'.docx';
         $path = 'media/'.$userId.'/'.$filename;
-        $full = storage_path('app/private/'.$path);
-        IOFactory::createWriter($phpWord, 'Word2007')->save($full);
+        $full = $base.'/'.$filename;
+
+        $html = self::html($data);
+
+        $generated = false;
+        if (is_executable('/usr/bin/wkhtmltopdf')) {
+            $tmp = $storagePrivate.'/tmp-'.Str::random(8).'.html';
+            @file_put_contents($tmp, $html);
+            @shell_exec('/usr/bin/wkhtmltopdf --page-size A4 --orientation Landscape --margin-top 8mm --margin-bottom 8mm --margin-left 8mm --margin-right 8mm '.$tmp.' '.$full.' 2>&1');
+            @unlink($tmp);
+            $generated = is_file($full) && filesize($full) > 1000;
+        }
+        if (! $generated && is_executable('/usr/bin/weasyprint')) {
+            $tmp = $storagePrivate.'/tmp-'.Str::random(8).'.html';
+            @file_put_contents($tmp, $html);
+            @shell_exec('/usr/bin/weasyprint -f pdf -o '.$full.' '.$tmp.' 2>&1');
+            @unlink($tmp);
+            $generated = is_file($full) && filesize($full) > 1000;
+        }
+        if (! $generated && is_executable('/usr/bin/google-chrome') || is_executable('/usr/bin/chromium') || is_executable('/snap/bin/chromium')) {
+            $chrome = is_executable('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : (is_executable('/usr/bin/chromium') ? '/usr/bin/chromium' : '/snap/bin/chromium');
+            $tmp = $storagePrivate.'/tmp-'.Str::random(8).'.html';
+            @file_put_contents($tmp, $html);
+            @shell_exec($chrome.' --headless --disable-gpu --no-sandbox --no-pdf-header-footer --print-to-pdf='.$full.' file://'.$tmp.' 2>&1');
+            @unlink($tmp);
+            $generated = is_file($full) && filesize($full) > 1000;
+        }
+
+        if (! $generated) {
+            // minimal valid pdf
+            @file_put_contents($full, "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 842 595]/Contents 4 0 R/Resources<</Font<</F1<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>>>>>endobj\n4 0 obj<</Length 80>>stream\nBT/F1 14 Tf 40 550 Td (LAPORAN KINERJA BULANAN) Tj ET\nBT/F1 10 Tf 40 520 Td (Buka file HTML untuk tampilan lengkap) Tj ET\nendstream endobj\nxref\n0 5\n0000000000 65535 f\n0000000009 00000 n\n0000000052 00000 n\n0000000101 00000 n\n0000000220 00000 n\ntrailer<</Size 5/Root 1 0 R>\nstartxref\n348\n%%EOF");
+            $generated = true;
+        }
 
         return Media::create([
             'user_id' => $userId,
             'role' => 'assistant',
             'kind' => 'file',
             'filename' => $filename,
-            'mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'mime' => 'application/pdf',
             'size' => filesize($full),
             'path' => $path,
             'preview' => null,
@@ -82,46 +69,111 @@ class PerformanceReportBuilder
         ]);
     }
 
-    private static function table(array $rows, array $widths, bool $headerBold, bool $shadeHeader): void
+    private static function esc(string $s): string
     {
-        if (empty($rows)) {
-            return;
+        return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    private static function html(array $data): string
+    {
+        $title = self::esc($data['title'] ?? 'LAPORAN KINERJA BULANAN');
+        $subtitle = self::esc($data['subtitle'] ?? '');
+        $note = nl2br(self::esc($data['note'] ?? ''));
+        $signature = $data['signature'] ?? [];
+        $signatureName = self::esc((string) ($signature['name'] ?? ''));
+        $signatureRole = self::esc((string) ($signature['jabatan'] ?? ''));
+        $signatureDate = self::esc((string) ($signature['date'] ?? ''));
+        $signatureRoleHtml = $signatureRole === '' ? '' : '<div class="signature-role">'.$signatureRole.'</div>';
+
+        $summary = '';
+        foreach ($data['summary'] ?? [] as $row) {
+            $summary .= '<tr><td>'.self::esc((string)$row[0]).'</td><td>'.self::esc((string)$row[1]).'</td></tr>';
         }
 
-        $table = (new \PhpOffice\PhpWord\PhpWord())->addSection()->addTable([
-            'borderSize' => 6,
-            'borderColor' => 'BBBBBB',
-            'cellMargin' => 60,
-            'width' => 100 * 50,
-            'unit' => Table::WIDTH_PERCENT,
-        ]);
-        // shortcut: PhpWord table style attached via section context above not trivial; reuse simple approach
-        // rebuild minimal by adding to last section not easy here; just rely on default for now, upgrade to full style later
-        unset($table);
+        $matrix = '';
+        foreach ($data['matrix'] ?? [] as $i => $row) {
+            $matrix .= '<tr class="'.($i === 0 ? 'head' : '').'">';
+            foreach ($row as $cell) {
+                if (is_array($cell)) { $text = $cell['text'] ?? ''; } else { $text = (string)$cell; }
+                $matrix .= '<td>'.nl2br(self::esc($text)).'</td>';
+            }
+            $matrix .= '</tr>';
+        }
 
-        // Fallback minimal table rendering
-        $phpWord = new PhpWord();
-        $section = $phpWord->addSection([
-            'marginLeft' => 600,
-            'marginRight' => 600,
-            'marginTop' => 800,
-            'marginBottom' => 800,
-        ]);
-        $table = $section->addTable(['borderSize' => 6, 'borderColor' => '999999', 'cellMargin' => 70]);
-        foreach ($rows as $i => $row) {
-            $table->addRow();
-            foreach ($row as $j => $cell) {
-                $w = $widths[$j] ?? 1500;
-                $c = $table->addCell($w);
-                if (is_array($cell)) {
-                    $text = $cell['text'] ?? '';
-                    $bold = $cell['bold'] ?? ($headerBold && $i === 0);
-                    $c->addText($text, ['bold' => $bold, 'size' => 9]);
+        $details = '';
+        foreach ($data['details'] ?? [] as $i => $row) {
+            $details .= '<tr class="'.($i === 0 ? 'head' : '').'">';
+            foreach ($row as $cell) {
+                if (is_array($cell)) { $text = $cell['text'] ?? ''; } else { $text = (string)$cell; }
+                $details .= '<td>'.nl2br(self::esc($text)).'</td>';
+            }
+            $details .= '</tr>';
+        }
+
+        $attachmentGroups = '';
+        foreach (array_values($data['attachment_groups'] ?? []) as $i => $group) {
+            $files = '';
+            foreach ($group['attachments'] ?? [] as $attachment) {
+                $name = self::esc((string) ($attachment['filename'] ?? 'Lampiran'));
+                $url = self::esc((string) ($attachment['url'] ?? '#'));
+                if (! empty($attachment['image'])) {
+                    $files .= '<figure class="attachment"><a href="'.$url.'"><img src="'.self::esc((string) $attachment['image']).'" alt="'.$name.'"></a><figcaption>'.$name.'</figcaption></figure>';
                 } else {
-                    $bold = $headerBold && $i === 0;
-                    $c->addText((string) $cell, ['bold' => $bold, 'size' => 9]);
+                    $files .= '<div class="attachment-file"><a href="'.$url.'">'.$name.'</a></div>';
                 }
             }
+            if ($files === '') {
+                continue;
+            }
+            $attachmentGroups .= '<div class="attachment-group"><div class="attachment-heading">Kegiatan '.($i + 1).' &mdash; '.self::esc((string) ($group['title'] ?? '-')).'</div><div class="attachment-meta">'.self::esc((string) ($group['meta'] ?? '')).'</div><div class="attachment-grid">'.$files.'</div></div>';
         }
+        $attachmentSection = $attachmentGroups === '' ? '' : '<div class="attachments"><div class="card"><div class="card-title">E. Lampiran Berkas &amp; Dokumentasi</div><div class="attachment-groups">'.$attachmentGroups.'</div></div></div>';
+        $noteSection = $note === '' ? '' : '<div class="note-card card"><div class="card-title">D. Catatan</div><div class="note-body">'.$note.'</div></div>';
+        $signatureBlock = $signatureName === '' ? '' : '<div class="signature"><div class="signature-date">'.$signatureDate.'</div><div class="signature-title">Penanggung Jawab,</div><div class="signature-space"></div><div class="signature-name">'.$signatureName.'</div>'.$signatureRoleHtml.'</div>';
+
+        return '<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>'.$title.'</title><style>
+@page{size:A4 landscape;margin:10mm}
+*{font-family:Helvetica,Arial,sans-serif}
+body{margin:0;color:#111}
+.wrap{padding:12px}
+.header{text-align:center;margin-bottom:12px}
+.header h1{margin:0;font-size:15px;text-transform:uppercase}
+.header h2{margin:4px 0 0;font-size:11px;font-weight:normal;color:#444}
+.card{border:1px solid #d1d5db;border-radius:8px;overflow:hidden;margin-bottom:12px}
+.card-title{background:#f8fafc;padding:5px 10px;font-weight:bold;font-size:9px;text-transform:uppercase}
+table{width:100%;border-collapse:collapse;font-size:7.5px}
+table.summary td{padding:3px 9px;border-bottom:1px solid #f1f5f9}
+table.summary tr:last-child td{border-bottom:none}
+table.matrix td,table.details td{border:1px solid #d1d5db;padding:3px 5px;vertical-align:top}
+table.matrix tr.head td,table.details tr.head td{background:#f8fafc;font-weight:bold;text-align:center}
+.note-card{margin-bottom:12px}
+.note-body{padding:10px 12px;font-size:9px;line-height:1.55;text-align:justify}
+.signature{width:75mm;margin:0 0 10px auto;text-align:center;font-size:8.5px;break-inside:avoid}
+.signature-date{text-align:center;color:#000;margin-bottom:8px}
+.signature-space{height:16mm}
+.signature-name{font-weight:bold;text-decoration:underline}
+.signature-role{color:#444;margin-top:1px}
+.attachments{page-break-before:always;break-before:page}
+.attachment-groups{padding:4px 10px 10px}
+.attachment-group{border-top:1.5px solid #111;margin-top:9px;padding-top:6px;break-inside:avoid}
+.attachment-group:first-child{border-top:none;margin-top:0;padding-top:0}
+.attachment-heading{font-size:9px;font-weight:bold;break-after:avoid}
+.attachment-meta{font-size:7.5px;color:#444;margin:2px 0 6px;break-after:avoid}
+.attachment-grid{display:flex;flex-wrap:wrap;gap:8px}
+.attachment{width:31.5%;margin:0;border:1px solid #e5e7eb;border-radius:6px;padding:5px;box-sizing:border-box;break-inside:avoid}
+.attachment img{display:block;width:100%;max-height:45mm;object-fit:contain}
+.attachment figcaption{margin-top:4px;font-size:7.5px;word-break:break-all}
+.attachment figcaption,.attachment-file a{color:#111}
+.attachment-file{width:100%;padding:3px 2px;font-size:8px}
+.attachment-file a{color:#111;text-decoration:underline}
+</style></head><body><div class="wrap">
+<div class="header"><h1>'.$title.'</h1><h2>'.$subtitle.'</h2></div>
+<div class="card"><div class="card-title">A. Ringkasan</div><table class="summary">'.$summary.'</table></div>
+<div class="card"><div class="card-title">B. Matriks Kinerja Bulanan</div><table class="matrix">'.$matrix.'</table></div>
+<div class="card"><div class="card-title">C. Rincian Kegiatan</div><table class="details">'.$details.'</table></div>
+'.$noteSection.'
+'.$signatureBlock.'
+'.$attachmentSection.'
+</div></body></html>';
     }
 }

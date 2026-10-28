@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiQueueTranscribe } from './api.js';
+import { showSuccess } from './feedback.js';
 import { ProgressBar, formatEta } from './Queue.jsx';
 
 const STORE_KEY = 'task-transcribe';
@@ -45,6 +46,7 @@ export default function Transcribe({ queue = [], refreshQueue }) {
       setTaskId(job.id);
       localStorage.setItem(STORE_KEY, job.id);
       refreshQueue?.();
+      showSuccess('Transkripsi berhasil masuk antrean.');
     } catch (e) {
       setError(e.message);
     }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
+import { confirmAction } from './feedback.js';
 
 const emptyForm = { name: '', email: '', password: '', is_admin: false };
 
@@ -49,7 +50,7 @@ export default function Users() {
     setError(null);
     setNotice(null);
     try {
-      await api('/api/users', { method: 'POST', body: JSON.stringify(form) });
+      await api('/api/users', { method: 'POST', body: JSON.stringify(form), success: 'Pengguna berhasil dibuat.' });
       setForm(emptyForm);
       setNotice('Pengguna dibuat.');
       await load();
@@ -64,7 +65,7 @@ export default function Users() {
     setError(null);
     setNotice(null);
     try {
-      await api(`/api/users/${u.id}`, { method: 'PUT', body: JSON.stringify({ is_admin: !u.is_admin }) });
+      await api(`/api/users/${u.id}`, { method: 'PUT', body: JSON.stringify({ is_admin: !u.is_admin }), success: 'Hak akses pengguna berhasil diperbarui.' });
       await load();
     } catch (err) {
       setError(err.message);
@@ -84,7 +85,7 @@ export default function Users() {
     try {
       const payload = { name: editForm.name, email: editForm.email };
       if (editForm.password) payload.password = editForm.password;
-      await api(`/api/users/${editUser.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      await api(`/api/users/${editUser.id}`, { method: 'PUT', body: JSON.stringify(payload), success: 'Akun pengguna berhasil diperbarui.' });
       setEditUser(null);
       setNotice(`Akun ${editForm.email} diperbarui.`);
       await load();
@@ -96,11 +97,16 @@ export default function Users() {
   };
 
   const removeUser = async (u) => {
-    if (!window.confirm(`Hapus pengguna ${u.email}? Tindakan ini permanen.`)) return;
+    const ok = await confirmAction({
+      title: 'Hapus Pengguna',
+      message: `Hapus pengguna ${u.email}? Tindakan ini permanen.`,
+      confirmLabel: 'Ya, hapus',
+    });
+    if (!ok) return;
     setError(null);
     setNotice(null);
     try {
-      await api(`/api/users/${u.id}`, { method: 'DELETE' });
+      await api(`/api/users/${u.id}`, { method: 'DELETE', success: 'Pengguna berhasil dihapus.' });
       setNotice(`Pengguna ${u.email} dihapus.`);
       await load();
     } catch (err) {

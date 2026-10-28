@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, mediaSrc, apiUpload, apiGeneratePptx, apiDraftPresentation, apiQueueTask } from './api.js';
+import { confirmAction, showSuccess } from './feedback.js';
 import { ProgressBar } from './Queue.jsx';
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
@@ -103,6 +104,7 @@ export default function Presentasi() {
         const media = await apiUpload(file);
         setMaterials((prev) => [...prev, media]);
       }
+      showSuccess(list.length > 1 ? `${list.length} materi berhasil diunggah.` : 'Materi berhasil diunggah.');
     } catch (e) {
       setError(e.message);
     } finally {
@@ -112,9 +114,11 @@ export default function Presentasi() {
   };
 
   const removeMaterial = async (id) => {
+    const ok = await confirmAction({ title: 'Hapus Materi', message: 'Hapus materi yang diunggah ini?', confirmLabel: 'Ya, hapus' });
+    if (!ok) return;
     setMaterials((prev) => prev.filter((m) => m.id !== id));
     try {
-      await api(`/api/media/${id}`, { method: 'DELETE' });
+      await api(`/api/media/${id}`, { method: 'DELETE', success: 'Materi berhasil dihapus.' });
     } catch {
       /* sudah lepas dari daftar; abaikan */
     }
@@ -172,9 +176,10 @@ export default function Presentasi() {
   };
 
   const remove = async (id) => {
-    if (!window.confirm('Hapus presentasi ini?')) return;
+    const ok = await confirmAction({ title: 'Hapus Presentasi', message: 'Hapus presentasi ini?', confirmLabel: 'Ya, hapus' });
+    if (!ok) return;
     try {
-      await api(`/api/media/${id}`, { method: 'DELETE' });
+      await api(`/api/media/${id}`, { method: 'DELETE', success: 'Presentasi berhasil dihapus.' });
       setItems((prev) => prev.filter((m) => m.id !== id));
       setResult((cur) => (cur && cur.id === id ? null : cur));
     } catch (e) {

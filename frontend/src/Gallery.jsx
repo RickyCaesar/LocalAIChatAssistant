@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, mediaSrc } from './api.js';
+import { confirmAction } from './feedback.js';
 
 const fmtDate = (iso) =>
   iso
@@ -92,9 +93,10 @@ export default function Gallery() {
   useEffect(load, []);
 
   const remove = async (id) => {
-    if (!window.confirm('Hapus media ini?')) return;
+    const ok = await confirmAction({ title: 'Hapus Media', message: 'Hapus media ini? Tindakan ini permanen.', confirmLabel: 'Ya, hapus' });
+    if (!ok) return;
     try {
-      await api(`/api/media/${id}`, { method: 'DELETE' });
+      await api(`/api/media/${id}`, { method: 'DELETE', success: 'Media berhasil dihapus.' });
       setItems((prev) => prev.filter((m) => m.id !== id));
       setSelected((cur) => (cur && cur.id === id ? null : cur));
     } catch (e) {
@@ -107,7 +109,7 @@ export default function Gallery() {
     setConverting(true);
     setError(null);
     try {
-      const made = await api(`/api/media/${selected.id}/pdf`, { method: 'POST' });
+      const made = await api(`/api/media/${selected.id}/pdf`, { method: 'POST', success: 'PDF berhasil dibuat.' });
       setItems((prev) => [made, ...prev]);
       setSelected(made);
     } catch (e) {

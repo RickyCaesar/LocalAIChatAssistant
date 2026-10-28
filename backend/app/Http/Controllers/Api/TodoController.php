@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Media;
 use App\Models\Todo;
 use App\Support\TodoEventSync;
 use Illuminate\Http\Request;
@@ -14,13 +15,26 @@ class TodoController extends Controller
 {
     private function serialize(Todo $todo): array
     {
-        $todo->loadMissing(['media:id,filename,mime', 'performancePlan:id,name,slug', 'event:id,todo_id']);
+        $todo->loadMissing(['media:id,filename,mime', 'performancePlan:id,name,slug', 'performancePlans:id,name,slug,indikator_kinerja,satuan', 'event:id,todo_id']);
+        $mediaItems = $this->mediaItems($todo);
+        $planIds = $todo->performancePlans->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+        if ($planIds === [] && $todo->performance_plan_id) {
+            $planIds = [(int) $todo->performance_plan_id];
+        }
 
         return [
             'id' => (int) $todo->id,
             'event_id' => $todo->event_id ? (int) $todo->event_id : null,
             'media_id' => $todo->media_id ? (int) $todo->media_id : null,
+            'media_ids' => $this->mediaIdsOf($todo),
             'performance_plan_id' => $todo->performance_plan_id ? (int) $todo->performance_plan_id : null,
+            'performance_plan_ids' => $planIds,
+            'performance_plans' => $todo->performancePlans->map(fn ($plan) => [
+                'id' => (int) $plan->id,
+                'name' => $plan->name,
+                'indikator_kinerja' => $plan->indikator_kinerja,
+                'satuan' => $plan->satuan,
+            ])->values()->all(),
             'title' => (string) $todo->title,
             'done' => (bool) $todo->done,
             'due_at' => $todo->due_at ? $todo->due_at->toIso8601String() : null,
@@ -28,11 +42,8 @@ class TodoController extends Controller
             'notes' => $todo->notes,
             'durasi_jam' => $todo->durasi_jam !== null ? (float) $todo->durasi_jam : null,
             'tindak_lanjut' => $todo->tindak_lanjut,
-            'media' => $todo->media ? [
-                'id' => (int) $todo->media->id,
-                'filename' => $todo->media->filename,
-                'mime' => $todo->media->mime,
-            ] : null,
+            'media' => $mediaItems[0] ?? null,
+            'media_items' => $mediaItems,
             'performance_plan' => $todo->performancePlan ? [
                 'id' => (int) $todo->performancePlan->id,
                 'name' => $todo->performancePlan->name,
@@ -45,6 +56,7 @@ class TodoController extends Controller
     private function rules(bool $creating): array
     {
         $media = Rule::exists('media', 'id')->where('user_id', auth()->id());
+        $plan = Rule::exists('performance_plans', 'id')->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', auth()->id()));
 
         return [
             'title' => $creating ? 'required|string|max:255' : 'sometimes|required|string|max:255',
@@ -56,14 +68,18 @@ class TodoController extends Controller
             'tindak_lanjut' => 'nullable|string|max:2000',
             'sync_calendar' => 'sometimes|boolean',
             'media_id' => ['nullable', 'integer', $media],
-            'performance_plan_id' => ['nullable', 'integer', Rule::exists('performance_plans', 'id')],
+            'media_ids' => 'sometimes|array',
+            'media_ids.*' => ['integer', $media],
+            'performance_plan_id' => ['nullable', 'integer', $plan],
+            'performance_plan_ids' => 'sometimes|array',
+            'performance_plan_ids.*' => ['integer', $plan],
         ];
     }
 
     public function index()
     {
         $todos = Todo::where('user_id', auth()->id())
-            ->with(['media:id,filename,mime', 'performancePlan:id,name,slug', 'event:id,todo_id'])
+            ->with(['media:id,filename,mime', 'performancePlan:id,name,slug', 'performancePlans:id,name,slug,indikator_kinerja,satuan', 'event:id,todo_id'])
             ->orderBy('done')
             ->orderByRaw("case priority when 'tinggi' then 0 when 'sedang' then 1 else 2 end")
             ->orderByDesc('id')
@@ -76,7 +92,7 @@ class TodoController extends Controller
     public function show(string $id)
     {
         $todo = Todo::where('user_id', auth()->id())
-            ->with(['media:id,filename,mime', 'performancePlan:id,name,slug', 'event:id,todo_id'])
+            ->with(['media:id,filename,mime', 'performancePlan:id,name,slug', 'performancePlans:id,name,slug,indikator_kinerja,satuan', 'event:id,todo_id'])
             ->findOrFail($id);
 
         return response()->json(['todo' => $this->serialize($todo)]);
@@ -86,21 +102,79 @@ class TodoController extends Controller
     {
         $data = $request->validate($this->rules(true));
         $sync = $request->boolean('sync_calendar');
+        $planIds = $this->planIds($data);
+        $mediaIds = $this->mediaIdsFromData($data);
 
-        $todo = DB::transaction(fn () => TodoEventSync::createTodo([
-            'user_id' => auth()->id(),
-            'title' => $data['title'],
-            'done' => false,
-            'due_at' => isset($data['due_at']) ? $this->toAppTz($data['due_at']) : null,
-            'priority' => $data['priority'] ?? 'sedang',
-            'notes' => $data['notes'] ?? null,
-            'durasi_jam' => $data['durasi_jam'] ?? null,
-            'tindak_lanjut' => $data['tindak_lanjut'] ?? null,
-            'media_id' => $data['media_id'] ?? null,
-            'performance_plan_id' => $data['performance_plan_id'] ?? null,
-        ], $sync));
+        $todo = DB::transaction(function () use ($data, $sync, $planIds, $mediaIds) {
+            $todo = TodoEventSync::createTodo([
+                'user_id' => auth()->id(),
+                'title' => $data['title'],
+                'done' => false,
+                'due_at' => isset($data['due_at']) ? $this->toAppTz($data['due_at']) : null,
+                'priority' => $data['priority'] ?? 'sedang',
+                'notes' => $data['notes'] ?? null,
+                'durasi_jam' => $data['durasi_jam'] ?? null,
+                'tindak_lanjut' => $data['tindak_lanjut'] ?? null,
+                'media_id' => $mediaIds[0] ?? null,
+                'media_ids' => $mediaIds ?: null,
+                'performance_plan_id' => $planIds[0] ?? null,
+            ], $sync);
+
+            TodoEventSync::syncPlans($todo, $planIds);
+
+            return $todo;
+        });
 
         return response()->json(['todo' => $this->serialize($todo)], 201);
+    }
+
+    private function planIds(array $data): array
+    {
+        if (array_key_exists('performance_plan_ids', $data)) {
+            return array_values(array_unique(array_filter(array_map('intval', $data['performance_plan_ids'] ?? []))));
+        }
+
+        return ! empty($data['performance_plan_id']) ? [(int) $data['performance_plan_id']] : [];
+    }
+
+    private function mediaIdsFromData(array $data): array
+    {
+        if (array_key_exists('media_ids', $data)) {
+            return array_values(array_unique(array_filter(array_map('intval', $data['media_ids'] ?? []))));
+        }
+
+        return ! empty($data['media_id']) ? [(int) $data['media_id']] : [];
+    }
+
+    private function mediaIdsOf(Todo $todo): array
+    {
+        $ids = is_array($todo->media_ids) ? $todo->media_ids : [];
+        if ($ids === [] && $todo->media_id) {
+            $ids = [(int) $todo->media_id];
+        }
+
+        return array_values(array_unique(array_filter(array_map('intval', $ids))));
+    }
+
+    private function mediaItems(Todo $todo): array
+    {
+        $ids = $this->mediaIdsOf($todo);
+        if ($ids === []) {
+            return [];
+        }
+
+        // shortcut: satu query media per item; pindah ke pivot/eager load bila datanya besar.
+        $media = Media::whereIn('id', $ids)->get()->keyBy('id');
+
+        return array_values(array_filter(array_map(function (int $id) use ($media) {
+            $item = $media->get($id);
+
+            return $item ? [
+                'id' => (int) $item->id,
+                'filename' => $item->filename,
+                'mime' => $item->mime,
+            ] : null;
+        }, $ids)));
     }
 
     public function update(Request $request, string $id)
@@ -143,14 +217,22 @@ class TodoController extends Controller
             if (array_key_exists('tindak_lanjut', $data)) {
                 $todo->tindak_lanjut = $data['tindak_lanjut'];
             }
-            if (array_key_exists('media_id', $data)) {
-                $todo->media_id = $data['media_id'];
+            if (array_key_exists('media_ids', $data) || array_key_exists('media_id', $data)) {
+                $mediaIds = $this->mediaIdsFromData($data);
+                $todo->media_id = $mediaIds[0] ?? null;
+                $todo->media_ids = $mediaIds ?: null;
             }
-            if (array_key_exists('performance_plan_id', $data)) {
-                $todo->performance_plan_id = $data['performance_plan_id'];
+            $planIds = null;
+            if (array_key_exists('performance_plan_ids', $data) || array_key_exists('performance_plan_id', $data)) {
+                $planIds = $this->planIds($data);
+                $todo->performance_plan_id = $planIds[0] ?? null;
             }
 
             $todo->save();
+
+            if ($planIds !== null) {
+                TodoEventSync::syncPlans($todo, $planIds);
+            }
 
             if ($hasSync && $sync && ! $todo->event_id) {
                 TodoEventSync::attachEvent($todo);
@@ -166,13 +248,17 @@ class TodoController extends Controller
         $data = $request->validate([
             'tindak_lanjut' => 'nullable|string|max:2000',
             'media_id' => ['nullable', 'integer', Rule::exists('media', 'id')->where('user_id', auth()->id())],
+            'media_ids' => 'sometimes|array',
+            'media_ids.*' => ['integer', Rule::exists('media', 'id')->where('user_id', auth()->id())],
         ]);
 
         if (array_key_exists('tindak_lanjut', $data)) {
             $todo->tindak_lanjut = $data['tindak_lanjut'];
         }
-        if (array_key_exists('media_id', $data)) {
-            $todo->media_id = $data['media_id'];
+        if (array_key_exists('media_ids', $data) || array_key_exists('media_id', $data)) {
+            $mediaIds = $this->mediaIdsFromData($data);
+            $todo->media_id = $mediaIds[0] ?? null;
+            $todo->media_ids = $mediaIds ?: null;
         }
         $todo->done = true;
         $todo->save();

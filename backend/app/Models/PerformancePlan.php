@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class PerformancePlan extends Model
 {
@@ -26,13 +26,13 @@ class PerformancePlan extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function todos(): HasMany
+    public function todos(): BelongsToMany
     {
-        return $this->hasMany(Todo::class);
+        return $this->belongsToMany(Todo::class, 'performance_plan_todo');
     }
 
-    public function events(): HasMany
+    public function events(): BelongsToMany
     {
-        return $this->hasMany(Event::class);
+        return $this->belongsToMany(Event::class, 'performance_plan_event');
     }
 }

@@ -1,3 +1,5 @@
+import { showSuccess } from './feedback.js';
+
 // Di HTTPS (HP lewat nginx) API dipanggil same-origin — nginx mem-proxy /api
 // ke backend. Di HTTP (localhost) langsung ke port 8000.
 export const API_URL =
@@ -30,7 +32,8 @@ export const mediaSrc = (path) => {
 };
 
 export async function api(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', Accept: 'application/json', ...(options.headers || {}) };
+  const headers = { Accept: 'application/json', ...(options.headers || {}) };
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -48,6 +51,15 @@ export async function api(path, options = {}) {
     const msg =
       (data && (data.detail || data.error || data.message)) || `Request failed (${res.status}).`;
     throw new Error(msg);
+  }
+
+  const method = (options.method || 'GET').toUpperCase();
+  const quiet = options.silent || path.startsWith('/api/login') || path.startsWith('/api/logout') || path.startsWith('/api/chat');
+  if (!quiet && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    showSuccess(
+      options.success ||
+        (method === 'DELETE' ? 'Data berhasil dihapus.' : method === 'PUT' ? 'Perubahan berhasil disimpan.' : 'Data berhasil diproses.')
+    );
   }
 
   return data;
@@ -106,7 +118,7 @@ export function apiQueueConvert(videoFile) {
 
 // Queue the AI notulensi build from a transcript.
 export function apiQueueNotulensi(source) {
-  return api('/api/queue/notulensi', { method: 'POST', body: JSON.stringify({ source }) });
+  return api('/api/queue/notulensi', { method: 'POST', body: JSON.stringify({ source }), success: 'Notulensi berhasil masuk antrean.' });
 }
 
 // Queue a PowerPoint build from Marp markdown. Returns a task { id, status, ... }.
@@ -114,6 +126,7 @@ export function apiGeneratePptx(markdown, filename, theme) {
   return api('/api/presentations', {
     method: 'POST',
     body: JSON.stringify({ markdown, filename, theme }),
+    success: 'Presentasi berhasil masuk antrean.',
   });
 }
 
@@ -123,6 +136,7 @@ export function apiDraftPresentation(prompt, material) {
   return api('/api/presentations/draft', {
     method: 'POST',
     body: JSON.stringify({ prompt, material: material || undefined }),
+    success: 'Draf presentasi berhasil dibuat.',
   });
 }
 
@@ -139,15 +153,15 @@ export function apiNotifications(after = 0) {
 }
 
 export function apiNotificationRead(id) {
-  return api(`/api/notifications/${id}/read`, { method: 'POST' });
+  return api(`/api/notifications/${id}/read`, { method: 'POST', silent: true });
 }
 
 export function apiNotificationsReadAll() {
-  return api('/api/notifications/read-all', { method: 'POST' });
+  return api('/api/notifications/read-all', { method: 'POST', silent: true });
 }
 
 export function apiQueueCancel(id) {
-  return api(`/api/queue/${id}`, { method: 'DELETE' });
+  return api(`/api/queue/${id}`, { method: 'DELETE', success: 'Tugas berhasil dibatalkan atau dihapus.' });
 }
 
 // Single task by id (for polling a build).

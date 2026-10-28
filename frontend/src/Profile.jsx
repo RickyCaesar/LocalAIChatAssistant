@@ -33,6 +33,7 @@ export default function Profile({ user, onUserChange }) {
       const data = await api('/api/profile', {
         method: 'PUT',
         body: JSON.stringify({ name, email }),
+        success: 'Profil berhasil disimpan.',
       });
       onUserChange(data.user);
       setProfileMsg('Profil tersimpan.');
@@ -52,6 +53,7 @@ export default function Profile({ user, onUserChange }) {
       await api('/api/profile', {
         method: 'PUT',
         body: JSON.stringify({ current_password: current, new_password: next }),
+        success: 'Password berhasil diperbarui.',
       });
       setCurrent('');
       setNext('');

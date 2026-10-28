@@ -75,6 +75,7 @@ export default function Settings() {
           tts_voice: ttsVoice,
           tts_speed: Number(ttsSpeed),
         }),
+        success: 'Pengaturan berhasil disimpan.',
       });
       localStorage.setItem('max-upload-mb', String(maxMb));
       // Halaman chat mendengarkan agar preferensi TTS langsung terpakai.
@@ -109,7 +110,7 @@ export default function Settings() {
   // memuat ulang + memperbarui cache localStorage.
   const saveTheme = (patch) => {
     setError(null);
-    api('/api/settings', { method: 'POST', body: JSON.stringify(patch) })
+    api('/api/settings', { method: 'POST', body: JSON.stringify(patch), silent: true })
       .then(() => window.dispatchEvent(new Event('hermes-settings-changed')))
       .catch((e) => setError(e.message));
   };

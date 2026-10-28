@@ -47,6 +47,7 @@ class TodoEventSync
             'durasi_jam' => $todo->durasi_jam ?: 1,
             'tindak_lanjut' => $todo->tindak_lanjut,
             'media_id' => $todo->media_id,
+            'media_ids' => $todo->media_ids,
             'performance_plan_id' => $todo->performance_plan_id,
         ]);
 
@@ -55,6 +56,8 @@ class TodoEventSync
 
         $event->todo_id = $todo->id;
         $event->saveQuietly();
+
+        self::copyPlans($todo, $event);
 
         return $event;
     }
@@ -77,6 +80,7 @@ class TodoEventSync
             'durasi_jam' => $duration,
             'tindak_lanjut' => $event->tindak_lanjut,
             'media_id' => $event->media_id,
+            'media_ids' => $event->media_ids,
             'performance_plan_id' => $event->performance_plan_id,
         ]);
 
@@ -86,7 +90,28 @@ class TodoEventSync
         $todo->event_id = $event->id;
         $todo->saveQuietly();
 
+        self::copyPlans($event, $todo);
+
         return $todo;
+    }
+
+    public static function syncPlans(Todo|Event $model, array $ids): void
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        $model->performancePlans()->sync($ids);
+
+        $other = $model instanceof Todo
+            ? ($model->event_id ? Event::find($model->event_id) : null)
+            : ($model->todo_id ? Todo::find($model->todo_id) : null);
+
+        if ($other) {
+            $other->performancePlans()->sync($ids);
+        }
+    }
+
+    private static function copyPlans(Todo|Event $from, Todo|Event $to): void
+    {
+        $to->performancePlans()->sync($from->performancePlans()->pluck('performance_plans.id')->all());
     }
 
     public static function detachTodo(Todo $todo): void

@@ -1,6 +1,51 @@
-import { useEffect, useMemo, useState } from 'react';
-import { api } from './api.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api, mediaSrc } from './api.js';
+import { confirmAction } from './feedback.js';
 import { holidaysForYear } from './holidays.js';
+
+function MultiSelect({ options, value = [], onChange, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  const selected = options.filter((o) => value.includes(o.value));
+  const toggle = (v) => {
+    const set = new Set(value);
+    if (set.has(v)) set.delete(v); else set.add(v);
+    onChange(Array.from(set));
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return (
+    <div ref={box} className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} className={`flex w-full items-center justify-between gap-2 text-left ${input}`}>
+        <span className={`truncate ${selected.length ? '' : 'text-slate-400'}`}>
+          {selected.length
+            ? `${selected.length > 1 ? `${selected.length} dipilih · ` : ''}${selected.map((s) => s.label).join(', ')}`
+            : placeholder}
+        </span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`h-4 w-4 shrink-0 transition ${open ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-brand-900">
+          <div className="max-h-56 overflow-auto p-1">
+            {options.length === 0 && <p className="px-2 py-2 text-xs text-slate-400">Belum ada indikator. Tambahkan di Laporan Kinerja.</p>}
+            {options.map((o) => (
+              <label key={o.value} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-brand-800">
+                <input type="checkbox" checked={value.includes(o.value)} onChange={() => toggle(o.value)} className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand focus:ring-brand dark:border-slate-600" />
+                <span className="min-w-0 break-words">{o.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const DAY_NAMES = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 const MONTH_NAMES = [
@@ -80,7 +125,8 @@ const emptyForm = (date) => ({
   syncTodo: false,
   done: false,
   performancePlanId: '',
-  mediaId: '',
+  performancePlanIds: [],
+  mediaItems: [],
   tindakLanjut: '',
 });
 
@@ -138,10 +184,15 @@ export default function CalendarPage() {
   const visibleFrom = view === 'minggu' ? weekStart : new Date(y, m, 1);
   const visibleTo = view === 'minggu' ? addDays(weekStart, 7) : new Date(y, m + 1, 1);
 
-  const filteredEvents = useMemo(
-    () => (planFilter ? events.filter((e) => String(e.performance_plan_id) === planFilter) : events),
-    [events, planFilter]
-  );
+  const filteredEvents = useMemo(() => {
+    if (!planFilter) return events;
+    return events.filter((e) => {
+      const ids = Array.isArray(e.performance_plan_ids) && e.performance_plan_ids.length
+        ? e.performance_plan_ids.map(String)
+        : (e.performance_plan_id ? [String(e.performance_plan_id)] : []);
+      return ids.includes(planFilter);
+    });
+  }, [events, planFilter]);
 
   const byDay = useMemo(() => {
     const map = {};
@@ -170,6 +221,18 @@ export default function CalendarPage() {
     setEditingId(null);
   };
 
+  const uploadFiles = async (files) => {
+    const list = Array.from(files || []);
+    if (!list.length) return;
+    setError(null);
+    for (const file of list) {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api('/api/media', { method: 'POST', body: fd, silent: true });
+      setForm((f) => ({ ...f, mediaItems: [...(f.mediaItems || []), { id: res.id, filename: res.filename, mime: res.mime }] }));
+    }
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return;
@@ -183,16 +246,18 @@ export default function CalendarPage() {
       recurrence: form.recurrence,
       sync_todo: Boolean(form.syncTodo),
       performance_plan_id: form.performancePlanId || null,
-      media_id: form.mediaId || null,
+      performance_plan_ids: Array.isArray(form.performancePlanIds) ? form.performancePlanIds.map(Number) : [],
+      media_id: form.mediaItems?.[0]?.id || null,
+      media_ids: (form.mediaItems || []).map((m) => m.id),
       tindak_lanjut: form.tindakLanjut || null,
       ...(editingId ? { done: Boolean(form.done) } : {}),
     });
     try {
       if (editingId) {
-        const res = await api(`/api/events/${editingId}`, { method: 'PUT', body });
+        const res = await api(`/api/events/${editingId}`, { method: 'PUT', body, success: 'Perubahan acara berhasil disimpan.' });
         setEvents((prev) => prev.map((x) => (x.id === editingId ? res.event : x)));
       } else {
-        const res = await api('/api/events', { method: 'POST', body });
+        const res = await api('/api/events', { method: 'POST', body, success: 'Acara berhasil ditambahkan.' });
         setEvents((prev) => [...prev, res.event]);
       }
       resetForm();
@@ -205,6 +270,9 @@ export default function CalendarPage() {
     const d = new Date(ev.start_at);
     const end = ev.end_at ? new Date(ev.end_at) : null;
     const hours = ev.durasi_jam ?? (end && end > d ? Math.round(((end - d) / 3600000) * 100) / 100 : 1);
+    const planIds = Array.isArray(ev.performance_plan_ids) && ev.performance_plan_ids.length
+      ? ev.performance_plan_ids.map(String)
+      : (ev.performance_plan_id ? [String(ev.performance_plan_id)] : []);
     setEditingId(ev.id);
     setViewItem(null);
     setTodoDetail(null);
@@ -217,8 +285,9 @@ export default function CalendarPage() {
       recurrence: ev.recurrence || 'none',
       syncTodo: Boolean(ev.todo_id),
       done: Boolean(ev.done),
-      performancePlanId: ev.performance_plan_id ?? '',
-      mediaId: ev.media_id ?? '',
+      performancePlanId: planIds[0] || '',
+      performancePlanIds: planIds,
+      mediaItems: ev.media_items?.length ? ev.media_items : (ev.media ? [ev.media] : []),
       tindakLanjut: ev.tindak_lanjut || '',
     });
   };
@@ -244,9 +313,10 @@ export default function CalendarPage() {
     const msg = ev.recurrence && ev.recurrence !== 'none'
       ? `Hapus seluruh seri "${ev.title}"?${linked}`
       : `Hapus acara "${ev.title}"?${linked}`;
-    if (!window.confirm(msg)) return;
+    const ok = await confirmAction({ title: 'Hapus Acara', message: msg, confirmLabel: 'Ya, hapus' });
+    if (!ok) return;
     try {
-      await api(`/api/events/${ev.id}`, { method: 'DELETE' });
+      await api(`/api/events/${ev.id}`, { method: 'DELETE', success: 'Acara berhasil dihapus.' });
       setEvents((prev) => prev.filter((x) => x.id !== ev.id));
       if (editingId === ev.id) resetForm();
     } catch (e2) {
@@ -269,16 +339,16 @@ export default function CalendarPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Kalender</h2>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Agenda, jadwal, e-SAKIP & hari libur Indonesia. Bisa dikelola lewat chat dengan Hermes.</p>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Agenda, jadwal kinerja & hari libur Indonesia. Bisa dikelola lewat chat dengan Hermes.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
-            aria-label="Filter indikator e-SAKIP"
+            aria-label="Filter Indikator Kinerja"
             className={`${input} !py-1.5 text-xs`}
           >
-            <option value="">Semua indikator</option>
+            <option value="">Semua Indikator Kinerja</option>
             {options.plans.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -431,13 +501,13 @@ export default function CalendarPage() {
                           </p>
                           {holiday && <p className="text-[11px] font-medium text-red-500">{holiday}</p>}
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            {occ.event.performance_plan && (
-                              <span className="rounded-full bg-skyblue/20 px-2 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue">{occ.event.performance_plan.name}</span>
-                            )}
+                            {(occ.event.performance_plans?.length ? occ.event.performance_plans : (occ.event.performance_plan ? [occ.event.performance_plan] : [])).map((plan) => (
+                              <span key={plan.id} className="rounded-full bg-skyblue/20 px-2 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue">{plan.indikator_kinerja || plan.name}</span>
+                            ))}
                             {occ.event.done && (
                               <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">Selesai</span>
                             )}
-                            {occ.event.media && <span className="text-[10px] text-slate-400">Bukti: {occ.event.media.filename}</span>}
+                            {occ.event.media && <span className="text-[10px] text-slate-400">Bukti: {occ.event.media.filename}{occ.event.media_items?.length > 1 ? ` +${occ.event.media_items.length - 1}` : ''}</span>}
                             {occ.event.durasi_jam ? <span className="text-[10px] text-slate-400">{occ.event.durasi_jam} jam</span> : null}
                           </div>
                           {occ.event.tindak_lanjut && <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{occ.event.tindak_lanjut}</p>}
@@ -495,8 +565,8 @@ export default function CalendarPage() {
                 </div>
               </div>
               <div>
-                <p className="text-xs text-slate-400">Indikator e-SAKIP / Laporan Kinerja</p>
-                <p>{viewItem.performance_plan?.name || '-'}</p>
+                <p className="text-xs text-slate-400">Indikator Kinerja</p>
+                <p>{(viewItem.performance_plans?.length ? viewItem.performance_plans : (viewItem.performance_plan ? [viewItem.performance_plan] : [])).map((plan) => plan.indikator_kinerja || plan.name).join(', ') || '-'}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Status</p>
@@ -514,14 +584,23 @@ export default function CalendarPage() {
                   <p className="whitespace-pre-wrap text-slate-600 dark:text-slate-300">{viewItem.tindak_lanjut || todoDetail?.tindak_lanjut}</p>
                 </div>
               )}
-              {(viewItem.media || todoDetail?.media) && (
-                <div>
-                  <p className="text-xs text-slate-400">Bukti Fisik</p>
-                  <a href={`/api/media/${viewItem.media?.id || todoDetail?.media?.id}`} target="_blank" rel="noreferrer" className="font-medium text-brand underline dark:text-skyblue">
-                    {viewItem.media?.filename || todoDetail?.media?.filename}
-                  </a>
-                </div>
-              )}
+              {(() => {
+                const files = viewItem.media_items?.length ? viewItem.media_items : (viewItem.media ? [viewItem.media] : (todoDetail?.media ? [todoDetail.media] : []));
+                return files.length > 0 ? (
+                  <div>
+                    <p className="text-xs text-slate-400">Bukti Fisik</p>
+                    <ul className="space-y-1">
+                      {files.map((m) => (
+                        <li key={m.id}>
+                          <a href={mediaSrc(`/api/media/${m.id}`)} target="_blank" rel="noreferrer" className="font-medium text-brand underline dark:text-skyblue">
+                            {m.filename}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null;
+              })()}
               {loadingView && <p className="text-xs text-slate-400">Memuat detail todolist...</p>}
               {todoDetail && (
                 <div>
@@ -559,33 +638,59 @@ export default function CalendarPage() {
               </select>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <select value={form.performancePlanId} onChange={(e) => setForm((f) => ({ ...f, performancePlanId: e.target.value }))} aria-label="Indikator e-SAKIP" className={input}>
-                <option value="">Indikator e-SAKIP...</option>
-                {options.plans.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <div className="flex flex-wrap items-center gap-2">
+              <MultiSelect
+                options={(options.plans || []).map((p) => ({
+                  value: String(p.id),
+                  label: [p.indikator_kinerja || p.name, p.satuan ? `(${p.satuan})` : null].filter(Boolean).join(' '),
+                }))}
+                value={Array.isArray(form.performancePlanIds) ? form.performancePlanIds : (form.performancePlanId ? [String(form.performancePlanId)] : [])}
+                onChange={(vals) => setForm((f) => ({ ...f, performancePlanIds: vals, performancePlanId: vals && vals.length ? vals[0] : '' }))}
+                placeholder="Pilih Indikator Kinerja..."
+              />
+              <div
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await uploadFiles(e.dataTransfer.files);
+                  } catch (err) {
+                    setError(err.message);
+                  }
+                }}
+                className="rounded-2xl border-2 border-dashed border-slate-300 px-3 py-2 text-center transition hover:border-skyblue dark:border-slate-700 dark:hover:border-skyblue"
+              >
+                <p className="text-[11px] text-slate-500">Seret &amp; lepas file atau pilih beberapa</p>
                 <input
                   type="file"
+                  multiple
                   onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setError(null);
-                    const fd = new FormData();
-                    fd.append('image', file);
                     try {
-                      const res = await api('/api/media', { method: 'POST', body: fd });
-                      setForm((f) => ({ ...f, mediaId: res.id }));
+                      await uploadFiles(e.target.files);
                     } catch (err) {
                       setError(err.message);
                     } finally {
                       e.target.value = '';
                     }
                   }}
-                  className="block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-400 dark:file:bg-brand-800 dark:file:text-slate-200"
+                  className="mt-1 block w-full text-xs text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-skyblue/80 file:to-cyan-400/80 file:px-2.5 file:py-1 file:text-[11px] file:font-medium file:text-white hover:file:opacity-90 dark:text-slate-400"
                 />
-                {form.mediaId && <span className="text-[11px] text-emerald-600 dark:text-emerald-300">File terlampir</span>}
+                {(form.mediaItems || []).length > 0 && (
+                  <ul className="mt-1 space-y-1 text-left">
+                    {form.mediaItems.map((m) => (
+                      <li key={m.id} className="flex items-center gap-2 text-[11px] text-emerald-600 dark:text-emerald-300">
+                        <a href={mediaSrc(`/api/media/${m.id}`)} target="_blank" rel="noreferrer" className="truncate underline">{m.filename}</a>
+                        <button
+                          type="button"
+                          aria-label={`Hapus lampiran ${m.filename}`}
+                          onClick={() => setForm((f) => ({ ...f, mediaItems: (f.mediaItems || []).filter((x) => x.id !== m.id) }))}
+                          className="shrink-0 text-slate-400 hover:text-blush"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
             <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Catatan (opsional)" rows={2} className={`w-full resize-none ${input}`} />
@@ -628,13 +733,13 @@ export default function CalendarPage() {
                     {REC_LABEL[occ.event.recurrence] ? <span className="ml-2 text-[10px] font-normal text-slate-400">{REC_LABEL[occ.event.recurrence]}</span> : null}
                   </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {occ.event.performance_plan && (
-                        <span className="rounded-full bg-skyblue/20 px-2 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue">{occ.event.performance_plan.name}</span>
-                      )}
+                      {(occ.event.performance_plans?.length ? occ.event.performance_plans : (occ.event.performance_plan ? [occ.event.performance_plan] : [])).map((plan) => (
+                        <span key={plan.id} className="rounded-full bg-skyblue/20 px-2 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-800 dark:text-skyblue">{plan.indikator_kinerja || plan.name}</span>
+                      ))}
                       {occ.event.done && (
                         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">Selesai</span>
                       )}
-                      {occ.event.media && <span className="text-[10px] text-slate-400">Bukti: {occ.event.media.filename}</span>}
+                      {occ.event.media && <span className="text-[10px] text-slate-400">Bukti: {occ.event.media.filename}{occ.event.media_items?.length > 1 ? ` +${occ.event.media_items.length - 1}` : ''}</span>}
                       {occ.event.durasi_jam ? <span className="text-[10px] text-slate-400">{occ.event.durasi_jam} jam</span> : null}
                     </div>
                     {occ.event.tindak_lanjut && <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500 dark:text-slate-400">{occ.event.tindak_lanjut}</p>}

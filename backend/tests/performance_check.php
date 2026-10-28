@@ -7,6 +7,7 @@ require __DIR__.'/../vendor/autoload.php';
 
 use App\Models\Event;
 use App\Models\Media;
+use App\Models\PerformancePlan;
 use App\Models\Todo;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -39,7 +40,10 @@ $fail = static function (string $message, array $body = []): void {
 };
 
 $user = null;
+$secondUser = null;
 $reportMedia = null;
+$pngPath = null;
+$templatePlanCreated = false;
 $error = null;
 
 try {
@@ -57,32 +61,46 @@ try {
     if ($status !== 200 || count($body['plans'] ?? []) !== 5 || ! $plan) {
         $fail('daftar 5 indikator gagal', $body);
     }
+    if (! PerformancePlan::where('slug', 'dssd')->exists()) {
+        PerformancePlan::create(['name' => 'DSSD Check', 'slug' => 'dssd']);
+        $templatePlanCreated = true;
+    }
 
-    $media = Media::create([
+    $media = collect(['bukti-check.jpg', 'bukti-check-2.jpg', 'bukti-check-3.jpg'])->map(fn ($name) => Media::create([
         'user_id' => $user->id,
         'role' => 'assistant',
         'kind' => 'image',
-        'filename' => 'bukti-check.jpg',
+        'filename' => $name,
         'mime' => 'image/jpeg',
         'size' => 100,
-        'path' => 'media/check/bukti-check.jpg',
+        'path' => 'media/check/'.$name,
         'preview' => null,
         'model' => 'check',
-    ]);
+    ]));
+    $media = $media->values();
+    $primary = $media->first();
+
+    $pngPath = storage_path('app/private/media/check/bukti-check.png');
+    @mkdir(dirname($pngPath), 0775, true);
+    file_put_contents($pngPath, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z4p8AAAAASUVORK5CYII='));
+    $media[0]->update(['filename' => 'bukti-check.png', 'mime' => 'image/png', 'path' => 'media/check/bukti-check.png']);
 
     [$status, $body] = $call('POST', '/api/todos', $token, [
         'title' => 'Uji e-SAKIP',
         'due_at' => $month.'-15T09:00:00+08:00',
         'priority' => 'tinggi',
+        'notes' => 'Catatan lengkap kegiatan uji',
         'durasi_jam' => 2.5,
         'performance_plan_id' => $plan['id'],
-        'media_id' => $media->id,
+        'media_ids' => $media->pluck('id')->all(),
         'tindak_lanjut' => 'Catatan awal',
         'sync_calendar' => true,
     ]);
     $todoId = $body['todo']['id'] ?? null;
     $eventId = $body['todo']['event_id'] ?? null;
-    if ($status !== 201 || ! $todoId || ! $eventId) {
+    if ($status !== 201 || ! $todoId || ! $eventId
+        || count($body['todo']['media_ids'] ?? []) !== 3
+        || count($body['todo']['media_items'] ?? []) !== 3) {
         $fail('todo + event gagal dibuat', $body);
     }
 
@@ -90,7 +108,8 @@ try {
     if (! $event || $event->start_at->format('Y-m-d H:i') !== $month.'-15 09:00'
         || $event->end_at->format('Y-m-d H:i') !== $month.'-15 11:30'
         || abs($event->durasi_jam - 2.5) > 0.01
-        || $event->performance_plan_id != $plan['id'] || $event->media_id != $media->id) {
+        || $event->performance_plan_id != $plan['id'] || $event->media_id != $primary->id
+        || count($event->media_ids ?? []) !== 3) {
         $fail('field event hasil sinkronisasi tidak sesuai');
     }
 
@@ -109,7 +128,7 @@ try {
 
     [$status, $body] = $call('POST', '/api/todos/'.$todoId.'/complete', $token, [
         'tindak_lanjut' => 'Selesai diuji',
-        'media_id' => $media->id,
+        'media_ids' => $media->pluck('id')->all(),
     ]);
     $event->refresh();
     if ($status !== 200 || ! Todo::find($todoId)->done || ! $event->todo_id
@@ -121,8 +140,10 @@ try {
         'title' => 'Kegiatan Kalender Mandiri',
         'start_at' => $month.'-18T08:00:00+08:00',
         'end_at' => $month.'-18T09:30:00+08:00',
+        'description' => 'Deskripsi lengkap kegiatan kalender',
+        'location' => 'Ruang Rapat',
         'performance_plan_id' => $plan['id'],
-        'media_id' => $media->id,
+        'media_ids' => $media->pluck('id')->all(),
     ]);
     if ($status !== 201 || ($body['event']['todo_id'] ?? null) !== null) {
         $fail('acara mandiri ber-indikator gagal dibuat', $body);
@@ -131,29 +152,103 @@ try {
     [$status, $body] = $call('GET', '/api/performance/report?month='.$month, $token);
     $row = collect($body['plans'] ?? [])->firstWhere('id', (int) $plan['id']);
     if ($status !== 200 || ($body['totals']['activities'] ?? 0) < 2
-        || ! $row || $row['activities'] < 2 || $row['evidence'] < 2 || $row['done'] < 1) {
+        || ! $row || $row['activities'] < 2 || $row['evidence'] < 2 || $row['done'] < 1
+        || ! in_array('bukti-check-2.jpg', $row['evidence_files'] ?? [], true)) {
         $fail('matriks laporan tidak menghitung Todo + acara mandiri', $body);
     }
 
-    [$status, $body] = $call('POST', '/api/performance/report', $token, ['month' => $month]);
+    $hermesConfigured = (config('services.hermes.base_url') ?: env('HERMES_BASE_URL'))
+        && (config('services.hermes.key') ?: env('HERMES_API_KEY'));
+    if (! $hermesConfigured) {
+        [$status, $body] = $call('POST', '/api/performance/note', $token, ['month' => $month]);
+        $note = (string) ($body['note'] ?? '');
+        $missing = array_values(array_filter(
+            [$plan['name'], $plan['indikator_kinerja'] ?: $plan['name'], 'Ringkasan capaian', 'Analisis performa', 'Analisis tindak lanjut', 'Rekomendasi', 'Kesimpulan'],
+            fn ($needle) => ! str_contains($note, $needle)
+        ));
+        if ($status !== 200 || $missing !== [] || str_contains($note, 'bukti-check') || substr_count($note, "\n\n") < 5 || strlen($note) < 700) {
+            $fail('catatan belum berupa rangkuman terstruktur atau menyebut nama file', ['missing' => $missing, 'note' => $note]);
+        }
+    }
+
+    $secondUser = User::create([
+        'name' => 'Pengguna Lain',
+        'email' => 'performance-other-'.bin2hex(random_bytes(4)).'@local.test',
+        'password' => Hash::make('secret123'),
+        'api_token' => 'check-other-'.bin2hex(random_bytes(8)),
+    ]);
+    $secondToken = $secondUser->api_token;
+    $nextMonth = date('Y-m', strtotime($month.'-01 +1 month'));
+    [$status, $body] = $call('GET', '/api/performance/report?month='.$nextMonth, $token);
+    $nextPlanIds = collect($body['plans'] ?? [])->pluck('id')->map(fn ($id) => (int) $id);
+    if ($status !== 200 || ! $nextPlanIds->contains((int) $plan['id'])) {
+        $fail('indikator yang pernah dipakai hilang saat ganti bulan', ['plans' => $nextPlanIds->all()]);
+    }
+
+    [$status, $body] = $call('POST', '/api/performance/plans', $secondToken, ['name' => 'Indikator Pengguna Lain']);
+    $secondPlanId = $body['plan']['id'] ?? null;
+    if ($status !== 201 || ! $secondPlanId) {
+        $fail('indikator pengguna kedua gagal dibuat', $body);
+    }
+
+    [$status, $body] = $call('GET', '/api/performance/report?month='.$month, $token);
+    $ownPlanIds = collect($body['plans'] ?? [])->pluck('id')->map(fn ($id) => (int) $id);
+    if ($status !== 200 || $ownPlanIds->contains((int) $secondPlanId) || ! $ownPlanIds->contains((int) $plan['id']) || $ownPlanIds->count() !== 1) {
+        $fail('matriks pengguna pertama memuat indikator pengguna lain atau indikator global yang tidak dipakai', ['plans' => $ownPlanIds->all()]);
+    }
+
+    [$status, $body] = $call('POST', '/api/todos', $token, [
+        'title' => 'Coba indikator pengguna lain',
+        'due_at' => $month.'-19T09:00:00+08:00',
+        'performance_plan_id' => $secondPlanId,
+    ]);
+    if ($status !== 422) {
+        $fail('pengguna bisa menghubungkan todo ke indikator pengguna lain', $body);
+    }
+
+    [$status, $body] = $call('POST', '/api/events', $token, [
+        'title' => 'Coba indikator pengguna lain di kalender',
+        'start_at' => $month.'-19T10:00:00+08:00',
+        'end_at' => $month.'-19T11:00:00+08:00',
+        'performance_plan_id' => $secondPlanId,
+    ]);
+    if ($status !== 422) {
+        $fail('pengguna bisa menghubungkan event ke indikator pengguna lain', $body);
+    }
+
+    [$status, $body] = $call('GET', '/api/performance/report?month='.$month, $secondToken);
+    $otherPlanIds = collect($body['plans'] ?? [])->pluck('id')->map(fn ($id) => (int) $id);
+    if ($status !== 200 || ! $otherPlanIds->contains((int) $secondPlanId) || $otherPlanIds->contains((int) $plan['id']) || $otherPlanIds->count() !== 1) {
+        $fail('matriks pengguna kedua memuat indikator pengguna lain', ['plans' => $otherPlanIds->all()]);
+    }
+
+    [$status, $body] = $call('POST', '/api/performance/report', $token, ['month' => $month, 'base_url' => 'https://contoh.test']);
     $reportId = $body['media']['id'] ?? null;
     if ($status !== 201 || ! $reportId) {
-        $fail('generate DOCX gagal', $body);
+        $fail('generate PDF gagal', $body);
     }
     $reportMedia = Media::find($reportId);
     $full = storage_path('app/private/'.$reportMedia->path);
-    $zip = new ZipArchive();
-    $xml = '';
-    if ($zip->open($full) === true) {
-        $xml = (string) $zip->getFromName('word/document.xml');
-        $zip->close();
+    $xml = (string) shell_exec('pdftotext '.escapeshellarg($full).' - 2>/dev/null');
+    $missing = array_values(array_filter(
+        ['LAPORAN KINERJA BULANAN', 'Uji e-SAKIP revisi', 'Kegiatan Kalender Mandiri', 'Selesai diuji', $plan['name'], 'CATATAN', 'Penanggung Jawab,', 'LAMPIRAN BERKAS', 'Kegiatan 1', 'bukti-check.png', 'bukti-check-2.jpg'],
+        fn ($needle) => ! str_contains($xml, $needle)
+    ));
+    if ($missing !== []) {
+        $fail('isi PDF tidak lengkap', ['missing' => $missing, 'text' => substr($xml, 0, 500)]);
     }
-    if (! str_contains($xml, 'LAPORAN KINERJA BULANAN')
-        || ! str_contains($xml, 'Uji e-SAKIP revisi')
-        || ! str_contains($xml, 'Kegiatan Kalender Mandiri')
-        || ! str_contains($xml, 'Selesai diuji')
-        || ! str_contains($xml, $plan['name'])) {
-        $fail('isi DOCX tidak lengkap');
+    $images = (string) shell_exec('pdfimages -list '.escapeshellarg($full).' 2>/dev/null');
+    if (substr_count(trim($images), "\n") < 2) {
+        $fail('gambar lampiran tidak tersemat di PDF', ['pdfimages' => $images]);
+    }
+    $links = (string) shell_exec('pdftohtml -xml -stdout -i '.escapeshellarg($full).' 2>/dev/null');
+    if (! str_contains($links, 'https://contoh.test/api/media/')) {
+        $fail('hyperlink lampiran tidak memakai base URL klien');
+    }
+    $pages = (int) trim((string) shell_exec('pdfinfo '.escapeshellarg($full).' 2>/dev/null | awk \'/^Pages:/{print $2}\''));
+    $lastPage = (string) shell_exec('pdftotext -f '.$pages.' -l '.$pages.' '.escapeshellarg($full).' - 2>/dev/null');
+    if ($pages < 2 || (! str_contains($lastPage, 'LAMPIRAN BERKAS') && ! str_contains($lastPage, 'bukti-check')) || str_contains($lastPage, 'D. CATATAN')) {
+        $fail('lampiran bukan halaman terakhir atau catatan masih di halaman lampiran', ['pages' => $pages, 'last' => substr($lastPage, 0, 300)]);
     }
 
     [$status, $body] = $call('POST', '/api/performance/templates/penginputan-dssd-bulanan', $token, ['month' => $month]);
@@ -174,7 +269,7 @@ try {
         'start_at' => $month.'-20T10:00:00+08:00',
         'end_at' => $month.'-20T12:00:00+08:00',
         'performance_plan_id' => $plan['id'],
-        'media_id' => $media->id,
+        'media_ids' => $media->pluck('id')->all(),
         'sync_todo' => true,
     ]);
     $fromEventId = $body['event']['id'] ?? null;
@@ -185,7 +280,8 @@ try {
     $fromEvent = Event::find($fromEventId);
     $fromEventTodo = Todo::find($fromEventTodoId);
     if (! $fromEventTodo || $fromEventTodo->due_at->format('Y-m-d H:i') !== $month.'-20 10:00'
-        || abs($fromEventTodo->durasi_jam - 2) > 0.01 || abs($fromEvent->durasi_jam - 2) > 0.01) {
+        || abs($fromEventTodo->durasi_jam - 2) > 0.01 || abs($fromEvent->durasi_jam - 2) > 0.01
+        || count($fromEventTodo->media_ids ?? []) !== 3) {
         $fail('todo hasil sinkronisasi event tidak sesuai');
     }
 
@@ -224,6 +320,16 @@ try {
         @unlink(storage_path('app/private/'.$reportMedia->path));
         Media::whereKey($reportMedia->id)->delete();
     }
+    if ($pngPath) {
+        @unlink($pngPath);
+    }
+    if ($templatePlanCreated) {
+        PerformancePlan::where('slug', 'dssd')->delete();
+    }
+    if ($secondUser) {
+        PerformancePlan::where('user_id', $secondUser->id)->delete();
+        $secondUser->delete();
+    }
     if ($user) {
         User::whereKey($user->id)->delete();
     }
@@ -234,4 +340,4 @@ if ($error !== null) {
     exit(1);
 }
 
-echo "OK: sinkronisasi Todo-Kalender, template, matriks, DOCX e-SAKIP\n";
+echo "OK: sinkronisasi Todo-Kalender, multi-media, template, matriks, PDF\n";

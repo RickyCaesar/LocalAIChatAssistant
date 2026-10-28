@@ -64,8 +64,10 @@ Route::middleware(EnsureBearerToken::class)->group(function () {
     Route::get('/performance/plans', [PerformanceReportController::class, 'plans']);
     Route::post('/performance/plans', [PerformanceReportController::class, 'storePlan']);
     Route::put('/performance/plans/{plan}', [PerformanceReportController::class, 'updatePlan']);
+    Route::delete('/performance/plans/{plan}', [PerformanceReportController::class, 'destroyPlan']);
     Route::get('/performance/report', [PerformanceReportController::class, 'index']);
     Route::post('/performance/report', [PerformanceReportController::class, 'store']);
+    Route::post('/performance/note', [PerformanceReportController::class, 'generateNote']);
     Route::post('/performance/templates/{key}', [PerformanceReportController::class, 'generateTemplate']);
 
     Route::get('/events', [EventController::class, 'index']);
