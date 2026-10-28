@@ -14,13 +14,13 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Suara AI (Text-to-Speech)** lokal memakai **Piper** (CPU): tombol **Bacakan** di tiap balasan AI, plus **Mode Suara** dua arah (bicara → transkripsi → jawaban dibacakan otomatis → mikrofon siap lagi) — lihat *Mode Suara*.
 - **Antrean proses (menu Antrean)**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, posisi dalam antrean, dan **jam selesai (WITA)**. Indikator ringkas tampil di header dari menu mana pun, dan progres tetap berjalan saat berpindah menu.
 - **Notifikasi**: lonceng di header dengan lencana belum dibaca, toast di kanan atas saat tugas antrean selesai/gagal, dan **notifikasi browser (OS)** opsional saat tab tidak aktif. Tersimpan per akun dan bisa ditandai dibaca.
-- **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — mis. tabel penugasan reviewer atau daftar tata tertib acara — lalu mengirimnya ke chat/Gallery.
-- **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen sesuai pola Dinas Pendidikan Kaltim (kop, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan) — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery.
+- **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — misalnya tabel jadwal atau daftar kegiatan — lalu mengirimnya ke chat/Gallery.
+- **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen dengan struktur rapat umum (kop, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan) — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery.
 - **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
-- **Todo e-SAKIP**: prioritas, catatan, due date + jam, durasi, tindak lanjut, bukti dari Gallery, dan 5 indikator (Anggaran Kas, Lapkin, Kemiskinan/Realisasi, DSSD, Geospasial). Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
-- **Kalender e-SAKIP**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang, filter per indikator, status selesai, serta edit tindak lanjut/bukti langsung dari acara tertaut. Bisa juga dikendalikan dari chat.
-- **Laporan Kinerja Bulanan**: matriks kegiatan/jam/bukti per indikator, total bulanan, template “Penginputan DSSD Bulanan” dan “Penyusunan Laporan Realisasi Fisik & Keuangan”, lalu **generate DOCX** berisi ringkasan, matriks, dan rincian kegiatan.
+- **Todo**: prioritas, catatan, tenggat + jam, durasi, tindak lanjut, bukti dari Gallery, dan indikator kinerja yang dapat dikelola per pengguna. Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
+- **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang, filter per indikator, status selesai, serta edit tindak lanjut/bukti langsung dari acara tertaut. Bisa juga dikendalikan dari chat.
+- **Laporan Kinerja Bulanan**: matriks kegiatan/jam/bukti per indikator, total bulanan, indikator yang dikelola per pengguna, template kegiatan bulanan, lalu **generate PDF** berisi ringkasan, matriks, rincian, catatan, tanda tangan, dan lampiran.
 - **Pengaturan**: timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau) yang **berlaku untuk semua pengguna**. Model AI tidak diatur di sini: aplikasi selalu memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes.
 - **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent.
 - **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik — termasuk **kartu kuota/kredit Hermes**, Kelola Pengguna, Skill, Settings).
@@ -190,7 +190,7 @@ Selain mengirim berkas lewat baris `MEDIA:`, agent dapat memicu aksi berikut dar
 - `ACTION: TODO_ADD <judul>`, `TODO_DONE <judul|#id>`, `TODO_DEL <judul|#id>`
 - `ACTION: EVENT_ADD <YYYY-MM-DD HH:MM> | <judul>`, `EVENT_DEL <#id>`
 - `ACTION: DOC_BUILD <JSON satu baris>` — menyusun XLSX lalu mengirimnya ke chat/Gallery.
-- `ACTION: NOTULEN_BUILD <JSON satu baris>` — menyusun **DOCX notulen rapat** (pola Dinas Pendidikan Kaltim) lalu mengirimnya ke chat/Gallery. Tidak perlu menulis skrip sendiri lagi.
+- `ACTION: NOTULEN_BUILD <JSON satu baris>` — menyusun **DOCX notulen rapat** dengan struktur rapat umum lalu mengirimnya ke chat/Gallery. Tidak perlu menulis skrip sendiri lagi.
 - `ACTION: GENERATE_PPTX` diikuti blok kode berpagar `marp` — merender Marp Markdown menjadi PPTX. Untuk presentasi yang disunting dulu, gunakan halaman **Presentasi**.
 
 Waktu dan tanggal relatif (`besok`, `lusa`, `minggu depan`) dihitung dari konteks waktu sekarang yang selalu disisipkan ke model: `WAKTU SEKARANG (WITA/Asia/Makassar, UTC+8): <tanggal> <jam>, hari ini ..., besok ...`. Semua jadwal yang dibuat `EVENT_ADD` disimpan dan ditampilkan dalam **WITA**.
@@ -199,39 +199,39 @@ Skema JSON `DOC_BUILD` (dijelaskan ke model lewat `ActionRunner::toolsInstructio
 
 ```json
 {
-  "filename": "penugasan-reviewer.xlsx",
-  "sheet": "TKA",
-  "title": "Penugasan Reviewer Tes Kemampuan Akademik",
+  "filename": "contoh-dokumen.xlsx",
+  "sheet": "Contoh",
+  "title": "Contoh Tabel Kegiatan",
   "blocks": [
-    {"heading": "Jadwal", "columns": ["No", "Reviewer", "Tanggal", "Sesi"],
-     "rows": [["1", "Budi", "2026-05-01", "Pagi"]]},
-    {"heading": "Tata Tertib Acara", "rows": [["Datang 15 menit lebih awal"]]}
+    {"heading": "Jadwal", "columns": ["No", "Kegiatan", "Tanggal", "Keterangan"],
+     "rows": [["1", "Contoh kegiatan", "2026-05-01", "Pagi"]]},
+    {"heading": "Catatan", "rows": [["Contoh catatan"]]}
   ]
 }
 ```
 
 Tiap blok boleh punya `heading`, `columns` (baris header tebal), dan `rows`; `columns`/`rows` juga boleh di level atas (dianggap satu blok). Berkas disimpan ke penyimpanan media dan otomatis muncul di **Gallery**.
 
-Skema JSON `NOTULEN_BUILD` (pola notulen Dinas Pendidikan dan Kebudayaan Provinsi Kalimantan Timur — kop, judul, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan):
+Skema JSON `NOTULEN_BUILD` (struktur notulen rapat umum — kop, judul, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan):
 
 ```json
 {
-  "filename": "Notulen_Rapat_BOSP.docx",
+  "filename": "Notulen_Rapat.docx",
   "judul": "NOTULENSI RAPAT",
-  "subjudul": "Rapat Koordinasi Pengelola Dana BOSP",
-  "identitas": {"Hari/Tanggal": "Selasa, 20 Oktober 2026", "Tempat": "Daring via Zoom",
-                "Moderator": "Bapak Sekretaris", "Peserta": "Kepala Bidang Teknis, KPA, PPT"},
-  "ringkasan": ["Rapat membahas pengelolaan Dana BOSP tahun anggaran 2027."],
+  "subjudul": "Rapat Koordinasi Bulanan",
+  "identitas": {"Hari/Tanggal": "Senin, 4 Januari 2027", "Tempat": "Ruang Rapat",
+                "Moderator": "Moderator", "Peserta": "Peserta rapat"},
+  "ringkasan": ["Rapat membahas agenda kegiatan bulanan."],
   "agenda": ["Pembukaan dan kehadiran peserta"],
-  "pembahasan": [{"judul": "A. Komponen Satuan Biaya per Siswa per Tahun",
-                   "paragraf": ["Angka satuan biaya sementara Rp3.500.000 per siswa per tahun."],
-                   "poin": ["Kebutuhan Belajar", "Operasional Sekolah"]}],
+  "pembahasan": [{"judul": "A. Pokok Bahasan",
+                   "paragraf": ["Penjelasan singkat mengenai pokok bahasan."],
+                   "poin": ["Poin pertama", "Poin kedua"]}],
   "tanya_jawab": ["Tidak ada pertanyaan dan jawaban tercatat dalam rekaman."],
-  "keputusan": ["Target penyerapan ditetapkan minimal 4% setiap minggu."],
-  "action_items": [["Penanggung Jawab", "Tindakan"], ["Kasubbag Perencanaan", "Membuat kertas kerja."]],
+  "keputusan": ["Keputusan rapat dicatat pada bagian ini."],
+  "action_items": [["Penanggung Jawab", "Tindakan"], ["Peserta", "Menindaklanjuti hasil rapat."]],
   "penutup": ["Demikian notulensi ini disusun berdasarkan rekaman rapat."],
-  "penanda_tangan": [["Pimpinan Kegiatan", "Bapak Sekretaris"], ["Notulen", "Kasubbag Perencanaan"]],
-  "catatan": ["Sumber: rekaman rapat 20 Oktober 2026."]
+  "penanda_tangan": [["Pimpinan Kegiatan", "Pimpinan"], ["Notulen", "Notulis"]],
+  "catatan": ["Sumber: rekaman rapat."]
 }
 ```
 
@@ -280,7 +280,7 @@ backend/            Laravel API
   app/Support/                FilePreview (ekstraksi teks/OCR), ActionRunner (aksi dari chat),
                               DocumentBuilder (penulis XLSX minimal untuk DOC_BUILD),
                               NotulenBuilder (penulis DOCX notulen untuk NOTULEN_BUILD),
-                              PerformanceReportBuilder (DOCX laporan kinerja e-SAKIP),
+                              PerformanceReportBuilder (laporan kinerja bulanan PDF),
                               TodoEventSync (sinkronisasi dua arah Todo ↔ Kalender),
                               MarpGenerator (Marp Markdown → PPTX via marp-cli + Chromium),
                               NotificationService (notifikasi in-app dari task antrean)
@@ -291,7 +291,7 @@ backend/            Laravel API
   tests/notulen_builder_check.php  self-check penulis DOCX notulen (php, tanpa framework)
   tests/eta_check.php         self-check rumus ETA (php, tanpa framework)
   tests/profile_check.php     self-check endpoint profil + proteksi settings (php, butuh DB)
-  tests/performance_check.php self-check sinkronisasi Todo/Kalender, template, matriks & DOCX e-SAKIP (php, butuh DB)
+  tests/performance_check.php self-check sinkronisasi Todo/Kalender, template, matriks & PDF laporan (php, butuh DB)
   tests/timezone_check.php    self-check WITA: konteks Hermes, "besok", konversi ISO client (php, butuh DB)
   routes/api.php              definisi endpoint
 frontend/           React + Vite + Tailwind
