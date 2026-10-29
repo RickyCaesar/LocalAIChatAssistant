@@ -211,12 +211,18 @@ class AIController extends Controller
         return $text;
     }
 
-    public function analytics()
+    public function analytics(Request $request)
     {
         $totalRequests = ChatLog::count();
         $okRequests = ChatLog::where('status', 'ok')->count();
 
-        $start = now()->subDays(6)->startOfDay();
+        $days = (int) $request->query('days', 7);
+        if (! in_array($days, [7, 30, 90, 365], true)) {
+            $days = 7;
+        }
+
+        $today = now()->startOfDay();
+        $start = $today->copy()->subDays($days - 1);
         $rows = ChatLog::where('created_at', '>=', $start)
             ->selectRaw('DATE(created_at) as day, COUNT(*) as requests, SUM(total_tokens) as tokens')
             ->groupBy('day')
@@ -225,8 +231,8 @@ class AIController extends Controller
             ->keyBy('day');
 
         $byDay = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $d = now()->subDays($i)->toDateString();
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $d = $today->copy()->subDays($i)->toDateString();
             $r = $rows->get($d);
             $byDay[] = [
                 'date' => $d,
@@ -272,6 +278,7 @@ class AIController extends Controller
                 'total_users' => \App\Models\User::count(),
             ],
             'by_day' => $byDay,
+            'range_days' => $days,
             'by_model' => $byModel,
             'by_user' => $byUser,
             'queue' => $this->queueStats(),

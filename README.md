@@ -16,6 +16,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Suara AI (Text-to-Speech)** lokal memakai **Piper** (CPU): tombol **Bacakan** di tiap balasan AI, plus **Mode Suara** dua arah (bicara → transkripsi → jawaban dibacakan otomatis → mikrofon siap lagi) — lihat *Mode Suara*.
 - **Antrean proses**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, posisi dalam antrean, dan **jam selesai (WITA)**. Tombol antrean di header (kiri lonceng notifikasi) menampilkan jumlah proses aktif dan membuka halaman Antrean; progres tetap berjalan saat berpindah menu.
 - **Notifikasi**: lonceng di header dengan lencana belum dibaca, toast di kanan atas saat tugas antrean selesai/gagal, dan **notifikasi browser (OS)** opsional saat tab tidak aktif. Tersimpan per akun dan bisa ditandai dibaca.
+- **Dashboard admin**: tren request & token untuk **7/30/90/365 hari**, total per rentang, label sumbu adaptif, dan tooltip per hari berisi jumlah request + token. Token chat streaming diambil dari `usage` gateway.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — misalnya tabel jadwal atau daftar kegiatan — lalu mengirimnya ke chat/Gallery.
 - **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen dengan struktur rapat umum (kop, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan) — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery.
 - **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
@@ -292,6 +293,7 @@ backend/            Laravel API
   tests/document_builder_check.php  self-check penulis XLSX (php, tanpa framework)
   tests/notulen_builder_check.php  self-check penulis DOCX notulen (php, tanpa framework)
   tests/eta_check.php         self-check rumus ETA (php, tanpa framework)
+  tests/analytics_check.php   self-check rentang grafik analitik 7/30/90/365 hari (php, butuh DB)
   tests/profile_check.php     self-check endpoint profil + proteksi settings (php, butuh DB)
   tests/performance_check.php self-check sinkronisasi Todo/Kalender, template, matriks & PDF laporan (php, butuh DB)
   tests/timezone_check.php    self-check WITA: konteks Hermes, "besok", konversi ISO client (php, butuh DB)
@@ -322,7 +324,7 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
 - **Laporan Kinerja:** `GET /api/performance/plans`, `GET|POST /api/performance/report` (`?month=YYYY-MM`; POST juga menerima `pimpinan_nama`, `pimpinan_jabatan`, `pimpinan_nip`), `POST /api/performance/templates/{key}`
 - **Settings:** `GET /api/settings` (semua user), `POST /api/settings` (**admin**)
-- **Admin:** `GET /api/analytics`, `GET /api/skills`, `GET|POST /api/users`, `PUT|DELETE /api/users/{id}`
+- **Admin:** `GET /api/analytics` (`?days=7|30|90|365` untuk tren), `GET /api/skills`, `GET|POST /api/users`, `PUT|DELETE /api/users/{id}`
 
 ## Batasan Diketahui
 
@@ -348,6 +350,7 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - Notifikasi tidak dibuat untuk aksi `ACTION:` (TODO/DOC_BUILD/GENERATE_PPTX) karena semuanya dieksekusi sinkron di dalam request chat — hasilnya sudah tampil di balasan.
 - **Zona waktu aplikasi = WITA** (`APP_TIMEZONE=Asia/Makassar`). Skeleton Laravel 12 mengunci `config/app.php` ke UTC, jadi nilainya diterapkan di `AppServiceProvider` (config + default PHP). Data lama digeser **+8 jam** sekali oleh migrasi `..._shift_timestamps_to_wita.php` agar momennya tidak berubah; migrasi itu sengaja tidak punya rollback (data sesudahnya sudah WITA). Tanggal dari client (`...Z`) dikonversi ke WITA di `EventController`/`TodoController` sebelum disimpan.
 - Pesan chat lama (sebelum ada cap waktu) tidak menampilkan jam maupun tanggal — field `at` hanya ditulis untuk pesan baru; tidak di-backfill.
+- Chat lama sebelum pencatatan `usage` streaming tidak punya data token, jadi tren token hari itu tetap 0; token hanya tercatat untuk chat baru setelah `stream_options.include_usage` diterapkan.
 - `POST /api/stt` (Mode Suara) sengaja **sinkron** karena jeda antrean (worker poll 3 dtk) terlalu lama untuk percakapan. Berkat 4 worker di atas, request lain tetap dilayani selama transkripsi; tapi tiap STT memakai 1 worker, jadi jangan menumpuk banyak sekaligus (sisa worker bisa habis dan lock SQLite menunggu `busy_timeout`). Dengan model `small` + `int8` klip pendek ≈ 5–10 dtk (panggilan pertama memuat model); dengan `large-v3` bisa > 1 menit — set `small`/`base` di Settings untuk voice mode.
 - Mode suara belum memakai VAD (deteksi keheningan): rekaman berhenti lewat klik atau batas 20 detik. Upgrade: `AnalyserNode` untuk memutus otomatis saat hening.
 - Kuota free Nous (fair-share) bisa habis di tengah percakapan → Hermes otomatis fallback ke model `:free` berikutnya; kalau semuanya kena limit, chat gagal sampai quota pulih (retry_after dari provider, biasanya puluhan menit). Tidak ada jalur berbayar: `auxiliary.free_only: true` menolak fallback OpenRouter non-`:free`.

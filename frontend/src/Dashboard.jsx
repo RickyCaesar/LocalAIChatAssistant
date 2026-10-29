@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 
-const shortDate = (iso) => {
+const axisDate = (iso, count) => {
   const d = new Date(`${iso}T00:00:00`);
-  return d.toLocaleDateString('en-US', { weekday: 'short' });
+  return count <= 7
+    ? d.toLocaleDateString('id-ID', { weekday: 'short' })
+    : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 };
+
+const fullDate = (iso) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+
+const RANGES = [
+  { days: 7, label: '7 hari' },
+  { days: 30, label: '30 hari' },
+  { days: 90, label: '90 hari' },
+  { days: 365, label: '1 tahun' },
+];
 
 const fmtDuration = (s) => {
   if (s == null) return '—';
@@ -26,16 +38,19 @@ function StatCard({ label, value, sub, accent }) {
   );
 }
 
-function Card({ title, children, className = '' }) {
+function Card({ title, children, className = '', action }) {
   return (
     <div className={`rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700 ${className}`}>
-      {title && <h3 className="text-sm font-semibold">{title}</h3>}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {title && <h3 className="text-sm font-semibold">{title}</h3>}
+        {action}
+      </div>
       {children}
     </div>
   );
 }
 
-function TrendChart({ data }) {
+function TrendChart({ data, rangeLabel }) {
   const W = 560;
   const H = 160;
   const pad = { t: 12, r: 12, b: 24, l: 30 };
@@ -51,18 +66,25 @@ function TrendChart({ data }) {
   const reqPts = data.map((d, i) => `${x(i)},${yReq(d.requests)}`).join(' ');
   const tokPts = data.map((d, i) => `${x(i)},${yTok(d.tokens)}`).join(' ');
   const area = `${pad.l},${pad.t + innerH} ${reqPts} ${pad.l + innerW},${pad.t + innerH}`;
+  const slot = innerW / Math.max(1, data.length);
+  const tickStep = Math.max(1, Math.ceil((data.length - 1) / 6));
+  const totalReq = data.reduce((sum, d) => sum + d.requests, 0);
+  const totalTok = data.reduce((sum, d) => sum + d.tokens, 0);
 
   return (
     <div>
-      <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-brand dark:bg-skyblue" /> Requests
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-amber-400" /> Tokens
         </span>
+        <span className="ml-auto tabular-nums">
+          {totalReq.toLocaleString('en-US')} request · {totalTok.toLocaleString('en-US')} token
+        </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 w-full" role="img" aria-label="Tren 7 hari">
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 w-full" role="img" aria-label={`Tren ${rangeLabel}`}>
         {[0, 0.5, 1].map((f) => (
           <line
             key={f}
@@ -79,13 +101,30 @@ function TrendChart({ data }) {
         <polyline points={tokPts} fill="none" strokeDasharray="4 3" className="stroke-skyblue/70 dark:stroke-brand-400" strokeWidth="1.5" />
         {data.map((d, i) => (
           <g key={d.date}>
-            <circle cx={x(i)} cy={yReq(d.requests)} r="2.5" className="fill-brand dark:fill-skyblue">
-              <title>{`${d.date}: ${d.requests} req · ${d.tokens} tok`}</title>
-            </circle>
-            <text x={x(i)} y={H - 6} textAnchor="middle" className="fill-slate-400 text-[9px]">
-              {shortDate(d.date)}
-            </text>
+            {data.length <= 90 && (
+              <circle cx={x(i)} cy={yReq(d.requests)} r="2.5" className="fill-brand dark:fill-skyblue">
+                <title>{`${fullDate(d.date)}: ${d.requests.toLocaleString('en-US')} request · ${d.tokens.toLocaleString('en-US')} token`}</title>
+              </circle>
+            )}
+            {(i % tickStep === 0 || i === data.length - 1) && (
+              <text x={x(i)} y={H - 6} textAnchor="middle" className="fill-slate-400 text-[9px]">
+                {axisDate(d.date, data.length)}
+              </text>
+            )}
           </g>
+        ))}
+        {/* shortcut: tooltip native SVG (delay hover, tanpa sentuh); ganti tooltip HTML berbasis state bila perlu. */}
+        {data.map((d, i) => (
+          <rect
+            key={`hit-${d.date}`}
+            x={pad.l + i * slot}
+            y={pad.t}
+            width={slot}
+            height={innerH}
+            fill="transparent"
+          >
+            <title>{`${fullDate(d.date)}: ${d.requests.toLocaleString('en-US')} request · ${d.tokens.toLocaleString('en-US')} token`}</title>
+          </rect>
         ))}
       </svg>
     </div>
@@ -174,19 +213,21 @@ function UsageCard({ usage }) {
   );
 }
 
-export default function Dashboard() {  const [data, setData] = useState(null);
+export default function Dashboard() {
+  const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [days, setDays] = useState(7);
 
   const load = () => {
     setError(null);
-    api('/api/analytics').then(setData).catch((e) => setError(e.message));
+    api(`/api/analytics?days=${days}`).then(setData).catch((e) => setError(e.message));
   };
 
   useEffect(() => {
     load();
     const t = setInterval(load, 30000);
     return () => clearInterval(t);
-  }, []);
+  }, [days]);
 
   if (error) {
     return (
@@ -209,6 +250,7 @@ export default function Dashboard() {  const [data, setData] = useState(null);
 
   const { stats, by_day, by_model, by_user, queue, content, hermes_status, hermes_usage } = data;
   const maxTok = Math.max(1, ...by_day.map((d) => d.tokens));
+  const rangeLabel = RANGES.find((r) => r.days === days)?.label || `${days} hari`;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -254,8 +296,30 @@ export default function Dashboard() {  const [data, setData] = useState(null);
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <Card className="md:col-span-2" title="Tren 7 hari terakhir">
-          <TrendChart data={by_day} />
+        <Card
+          className="md:col-span-2"
+          title={`Tren ${rangeLabel} terakhir`}
+          action={
+            <div className="flex flex-wrap gap-1">
+              {RANGES.map((range) => (
+                <button
+                  key={range.days}
+                  type="button"
+                  onClick={() => setDays(range.days)}
+                  aria-pressed={days === range.days}
+                  className={`rounded-lg px-2 py-1 text-xs font-medium transition ${
+                    days === range.days
+                      ? 'bg-brand text-white dark:bg-skyblue dark:text-brand-900'
+                      : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-brand-800'
+                  }`}
+                >
+                  {range.label}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          <TrendChart data={by_day} rangeLabel={rangeLabel} />
         </Card>
 
         <Card title="Token">
@@ -274,9 +338,9 @@ export default function Dashboard() {  const [data, setData] = useState(null);
             </div>
           </dl>
           <h4 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Token per hari</h4>
-          <div className="mt-2 flex h-16 items-end gap-1.5">
+          <div className={`mt-2 flex h-16 items-end ${by_day.length > 90 ? 'gap-0' : by_day.length > 30 ? 'gap-0.5' : 'gap-1.5'}`}>
             {by_day.map((d) => (
-              <div key={d.date} className="flex-1" title={`${d.date}: ${d.tokens.toLocaleString('en-US')} token`}>
+              <div key={d.date} className="flex-1" title={`${fullDate(d.date)}: ${d.requests.toLocaleString('en-US')} request · ${d.tokens.toLocaleString('en-US')} token`}>
                 <div
                   className="w-full rounded-t bg-brand/60 dark:bg-skyblue/40"
                   style={{ height: `${Math.max(4, (d.tokens / maxTok) * 100)}%` }}
