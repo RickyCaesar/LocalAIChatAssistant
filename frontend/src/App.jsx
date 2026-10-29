@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, API_URL, clearToken, apiUpload, mediaUrl, mediaSrc, streamChat, apiQueue, apiQueueCancel, apiNotifications, apiNotificationRead, apiNotificationsReadAll, apiStt } from './api.js';
@@ -21,8 +21,8 @@ import QueuePage from './Queue.jsx';
 import Skills from './Skills.jsx';
 import Profile from './Profile.jsx';
 import { NotificationBell, ToastContainer, browserNotify, chime } from './Notifications.jsx';
-// shortcut: pesan lama tanpa field at tidak menampilkan jam; tidak di-backfill.
-import { fmtWita } from './time.js';
+// shortcut: pesan lama tanpa field at tidak menampilkan jam/tanggal; tidak di-backfill.
+import { fmtWita, fmtWitaDate } from './time.js';
 
 const mediaSrcFor = mediaSrc;
 
@@ -1621,14 +1621,23 @@ export default function App() {
                     </p>
                   </div>
                 )}
-                {messages.map((message, i) => (
-                  <MessageBubble
-                    key={i}
-                    message={message}
-                    speaking={speaking === i}
-                    onSpeak={message.role === 'assistant' && !message.error ? () => speakAt(i, message.content) : null}
-                  />
-                ))}
+                {messages.map((message, i) => {
+                  const date = fmtWitaDate(message.at);
+                  return (
+                    <Fragment key={i}>
+                      {date && date !== fmtWitaDate(messages[i - 1]?.at) && (
+                        <div role="separator" className="w-fit self-center rounded-full bg-cream px-3 py-1 text-[11px] font-medium text-slate-500 shadow-sm dark:bg-brand-800 dark:text-slate-400">
+                          {date}
+                        </div>
+                      )}
+                      <MessageBubble
+                        message={message}
+                        speaking={speaking === i}
+                        onSpeak={message.role === 'assistant' && !message.error ? () => speakAt(i, message.content) : null}
+                      />
+                    </Fragment>
+                  );
+                })}
                 {streamText && <StreamBubble text={streamText} />}
                 {loading && !streamText && (
                   <div className="flex w-full justify-start gap-3">

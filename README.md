@@ -4,7 +4,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 ## Fitur
 
-- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** yang tampil di bubble. Sesi bisa diganti namanya langsung dari sidebar (ikon pensil) dan tetap tampil di sidebar compact.
+- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** di bubble, dan **pemisah tanggal** ala WhatsApp (Hari ini/Kemarin/tanggal lengkap) muncul sebelum pesan pertama tiap hari. Sesi bisa diganti namanya langsung dari sidebar (ikon pensil) dan tetap tampil di sidebar compact.
 - **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), menyusun presentasi (PPTX) bertema, serta mengirim berkas hasil olahan. Hermes selalu diberi **waktu sekarang (WITA) + tanggal hari ini & besok**, jadi permintaan seperti "jadwalkan besok jam 9" menghasilkan tanggal yang tepat.
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
@@ -298,7 +298,7 @@ frontend/           React + Vite + Tailwind
   src/App.jsx                 shell, navigasi sidebar, chat, polling antrean global
   src/*.jsx                   Gallery, Todo, Calendar, PerformanceReport, Transcribe, Convert, Presentasi, Notulensi, Queue, Skills, Settings, Users, Dashboard, Profile (akun), Notifications (lonceng + toast)
   src/holidays.js             helper hari libur Indonesia (date-holidays)
-  src/time.js                 helper format jam WITA (dipakai bubble chat & riwayat antrean)
+  src/time.js                 helper format jam & tanggal WITA (chat dan riwayat antrean)
   src/theme.css               override utilitas Tailwind agar memakai variabel tema (diimpor setelah index.css)
 tools/topdf.sh      konversi dokumen → PDF via container (dipakai agent dari chat)
 docker-compose.yml
@@ -345,7 +345,7 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - Notifikasi diambil lewat **polling 3 detik** (bersamaan dengan poll antrean), bukan SSE/WebSocket: cukup untuk volume sekarang tanpa infrastruktur streaming. Di tab yang tidak aktif, browser men-throttle timer (bisa jadi ~1 menit), jadi notifikasi OS bisa tertunda; upgrade ke Service Worker + Push API untuk notifikasi instan.
 - Notifikasi tidak dibuat untuk aksi `ACTION:` (TODO/DOC_BUILD/GENERATE_PPTX) karena semuanya dieksekusi sinkron di dalam request chat — hasilnya sudah tampil di balasan.
 - **Zona waktu aplikasi = WITA** (`APP_TIMEZONE=Asia/Makassar`). Skeleton Laravel 12 mengunci `config/app.php` ke UTC, jadi nilainya diterapkan di `AppServiceProvider` (config + default PHP). Data lama digeser **+8 jam** sekali oleh migrasi `..._shift_timestamps_to_wita.php` agar momennya tidak berubah; migrasi itu sengaja tidak punya rollback (data sesudahnya sudah WITA). Tanggal dari client (`...Z`) dikonversi ke WITA di `EventController`/`TodoController` sebelum disimpan.
-- Pesan chat lama (sebelum ada cap waktu) tidak menampilkan jam — field `at` hanya ditulis untuk pesan baru; tidak di-backfill.
+- Pesan chat lama (sebelum ada cap waktu) tidak menampilkan jam maupun tanggal — field `at` hanya ditulis untuk pesan baru; tidak di-backfill.
 - `POST /api/stt` (Mode Suara) sengaja **sinkron** karena jeda antrean (worker poll 3 dtk) terlalu lama untuk percakapan. Berkat 4 worker di atas, request lain tetap dilayani selama transkripsi; tapi tiap STT memakai 1 worker, jadi jangan menumpuk banyak sekaligus (sisa worker bisa habis dan lock SQLite menunggu `busy_timeout`). Dengan model `small` + `int8` klip pendek ≈ 5–10 dtk (panggilan pertama memuat model); dengan `large-v3` bisa > 1 menit — set `small`/`base` di Settings untuk voice mode.
 - Mode suara belum memakai VAD (deteksi keheningan): rekaman berhenti lewat klik atau batas 20 detik. Upgrade: `AnalyserNode` untuk memutus otomatis saat hening.
 - Kuota free Nous (fair-share) bisa habis di tengah percakapan → Hermes otomatis fallback ke model `:free` berikutnya; kalau semuanya kena limit, chat gagal sampai quota pulih (retry_after dari provider, biasanya puluhan menit). Tidak ada jalur berbayar: `auxiliary.free_only: true` menolak fallback OpenRouter non-`:free`.
