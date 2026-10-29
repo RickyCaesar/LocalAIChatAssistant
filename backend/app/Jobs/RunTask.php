@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Media;
 use App\Models\Setting;
 use App\Models\Task;
+use App\Support\ClamAVScanner;
 use App\Support\MarpGenerator;
 use App\Support\NotificationService;
 use Illuminate\Bus\Queueable;
@@ -86,6 +87,11 @@ class RunTask implements ShouldQueue
         if (! is_file($src)) {
             throw new \RuntimeException('Berkas video tidak ditemukan.');
         }
+        if (! ClamAVScanner::scanFile($src)) {
+            @unlink($src);
+
+            throw new \RuntimeException('Berkas video ditolak oleh pemindai antivirus.');
+        }
 
         $rel = 'media/'.$task->user_id.'/'.Str::uuid().'.mp3';
         $dest = storage_path('app/private/'.$rel);
@@ -140,6 +146,11 @@ class RunTask implements ShouldQueue
         $audio = storage_path('app/'.(string) ($task->payload['path'] ?? ''));
         if (! is_file($audio)) {
             throw new \RuntimeException('Berkas audio tidak ditemukan.');
+        }
+        if (! ClamAVScanner::scanFile($audio)) {
+            @unlink($audio);
+
+            throw new \RuntimeException('Berkas audio ditolak oleh pemindai antivirus.');
         }
 
         try {

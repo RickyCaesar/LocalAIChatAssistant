@@ -1,4 +1,4 @@
-import { showSuccess } from './feedback.js';
+import { showAlert, showSuccess } from './feedback.js';
 
 // Di HTTPS (HP lewat nginx) API dipanggil same-origin — nginx mem-proxy /api
 // ke backend. Di HTTP (localhost) langsung ke port 8000.
@@ -65,6 +65,11 @@ export async function api(path, options = {}) {
   return data;
 }
 
+function alertVirus(data) {
+  if (data?.code !== 'virus_detected') return;
+  showAlert(data.error || 'Berkas ditolak oleh pemindai antivirus.', 'File virus terdeteksi');
+}
+
 export async function apiUpload(imageFile) {
   const fd = new FormData();
   fd.append('image', imageFile);
@@ -79,6 +84,7 @@ export async function apiUpload(imageFile) {
     window.dispatchEvent(new CustomEvent('hermes-auth-expired'));
   }
   if (!res.ok) {
+    alertVirus(data);
     throw new Error(data.detail || data.error || data.message || `Upload failed (${res.status}).`);
   }
   return data;
@@ -97,6 +103,7 @@ async function apiUploadTo(path, fd) {
     window.dispatchEvent(new CustomEvent('hermes-auth-expired'));
   }
   if (!res.ok) {
+    alertVirus(data);
     throw new Error(data.detail || data.error || data.message || `Request gagal (${res.status}).`);
   }
   return data;

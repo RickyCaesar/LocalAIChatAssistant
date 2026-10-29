@@ -14,11 +14,12 @@ use App\Http\Controllers\Api\TTSController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\EnsureBearerToken;
+use App\Http\Middleware\ScanUploads;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
-Route::middleware(EnsureBearerToken::class)->group(function () {
+Route::middleware([EnsureBearerToken::class, ScanUploads::class])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::post('/logout', [AuthController::class, 'logout']);

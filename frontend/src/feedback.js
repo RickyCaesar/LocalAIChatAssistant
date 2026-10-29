@@ -17,3 +17,7 @@ export function resolveConfirm(ok) {
 export function showSuccess(message = 'Proses berhasil.', title = 'Berhasil') {
   window.dispatchEvent(new CustomEvent('app-success', { detail: { title, message } }));
 }
+
+export function showAlert(message = 'Terjadi masalah.', title = 'Peringatan') {
+  window.dispatchEvent(new CustomEvent('app-success', { detail: { title, message, danger: true } }));
+}

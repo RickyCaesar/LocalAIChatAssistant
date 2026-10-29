@@ -27,6 +27,16 @@ class NotificationService
         }
     }
 
+    public static function virusDetected(int $userId, string $filename): void
+    {
+        self::send(
+            $userId,
+            'File virus terdeteksi',
+            'File "'.basename($filename).'" terdeteksi berbahaya dan diblokir.',
+            'error',
+        );
+    }
+
     // Satu tempat untuk semua task antrean (RunTask): sukses & gagal.
     public static function taskFinished(Task $task): void
     {

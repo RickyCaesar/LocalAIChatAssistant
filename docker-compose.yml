@@ -4,6 +4,9 @@ services:
     image: local-ai-chat-backend
     container_name: ai-chat-backend
     restart: unless-stopped
+    depends_on:
+      clamav:
+        condition: service_started
     ports:
       - "8000:8000"
     volumes:
@@ -32,8 +35,18 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
+      clamav:
+        condition: service_started
       backend:
         condition: service_healthy
+
+  clamav:
+    image: clamav/clamav:latest
+    container_name: local-ai-clamav
+    restart: unless-stopped
+    mem_limit: 2g
+    volumes:
+      - clamav_data:/var/lib/clamav
 
   frontend:
     build:
@@ -49,3 +62,6 @@ services:
       - ./certs:/certs-host:ro   # sertifikat mkcert opsional, lihat README
     depends_on:
       - backend
+
+volumes:
+  clamav_data:
