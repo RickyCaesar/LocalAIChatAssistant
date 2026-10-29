@@ -4,25 +4,25 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 ## Fitur
 
-- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** yang tampil di bubble.
+- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** yang tampil di bubble. Sesi bisa diganti namanya langsung dari sidebar (ikon pensil) dan tetap tampil di sidebar compact.
 - **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), menyusun presentasi (PPTX) bertema, serta mengirim berkas hasil olahan. Hermes selalu diberi **waktu sekarang (WITA) + tanggal hari ini & besok**, jadi permintaan seperti "jadwalkan besok jam 9" menghasilkan tanggal yang tepat.
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
 - **Konversi video ke MP3** (menu **ConvertToAudio**): video (MP4/MKV/MOV/…) atau berkas audio lain → MP3. Memakai PyAV (venv STT yang sudah ada), jadi tak perlu `ffmpeg` sistem. Diproses **asinkron di antrean**.
-- **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pencarian**, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
+- **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pencarian** nama berkas/percakapan/tanggal, **urutan tanggal** terbaru/terlama, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
 - **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper`; unggah via tombol atau **drag & drop**. Diproses **asinkron di antrean** (container `queue-worker`).
 - **Suara AI (Text-to-Speech)** lokal memakai **Piper** (CPU): tombol **Bacakan** di tiap balasan AI, plus **Mode Suara** dua arah (bicara → transkripsi → jawaban dibacakan otomatis → mikrofon siap lagi) — lihat *Mode Suara*.
-- **Antrean proses (menu Antrean)**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, posisi dalam antrean, dan **jam selesai (WITA)**. Indikator ringkas tampil di header dari menu mana pun, dan progres tetap berjalan saat berpindah menu.
+- **Antrean proses**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, posisi dalam antrean, dan **jam selesai (WITA)**. Tombol antrean di header (kiri lonceng notifikasi) menampilkan jumlah proses aktif dan membuka halaman Antrean; progres tetap berjalan saat berpindah menu.
 - **Notifikasi**: lonceng di header dengan lencana belum dibaca, toast di kanan atas saat tugas antrean selesai/gagal, dan **notifikasi browser (OS)** opsional saat tab tidak aktif. Tersimpan per akun dan bisa ditandai dibaca.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — misalnya tabel jadwal atau daftar kegiatan — lalu mengirimnya ke chat/Gallery.
 - **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen dengan struktur rapat umum (kop, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan) — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery.
 - **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
-- **Todo**: prioritas, catatan, tenggat + jam, durasi, tindak lanjut, bukti dari Gallery, dan indikator kinerja yang dapat dikelola per pengguna. Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
+- **Todo**: prioritas, catatan, tenggat + jam, durasi, tindak lanjut, bukti dari Gallery, dan indikator kinerja yang dapat dikelola per pengguna. Daftar bisa difilter per tanggal dan diurutkan berdasarkan tenggat terdekat/terjauh. Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang, filter per indikator, status selesai, serta edit tindak lanjut/bukti langsung dari acara tertaut. Bisa juga dikendalikan dari chat.
-- **Laporan Kinerja Bulanan**: matriks kegiatan/jam/bukti per indikator, total bulanan, indikator yang dikelola per pengguna, template kegiatan bulanan, lalu **generate PDF** berisi ringkasan, matriks, rincian, catatan, tanda tangan, dan lampiran.
+- **Laporan Kinerja Bulanan**: matriks kegiatan/jam/bukti per indikator, total bulanan, indikator yang dikelola per pengguna, template kegiatan bulanan, lalu **generate PDF** berisi ringkasan, matriks, rincian, catatan, tanda tangan, dan lampiran. NIP dan jabatan pengguna diambil dari profil; saat generate dapat diisi nama, jabatan, dan NIP pimpinan untuk blok **"Mengetahui,"** di samping tanda tangan Penanggung Jawab.
 - **Pengaturan**: timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau) yang **berlaku untuk semua pengguna**. Model AI tidak diatur di sini: aplikasi selalu memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes.
-- **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent.
+- **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent dengan pencarian nama/kategori/deskripsi.
 - **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik — termasuk **kartu kuota/kredit Hermes**, Kelola Pengguna, Skill, Settings).
 
 ## Teknologi
@@ -264,7 +264,7 @@ Perekaman mikrofon butuh **secure context**: `localhost` atau HTTPS — dari HP 
 - Tidak ada registrasi publik. Admin menambah akun lewat menu **Pengguna**; untuk instalasi baru, buat admin pertama dengan `docker compose exec backend php artisan app:create-admin`. Login tetap terbuka di `/api/login`.
 - Autentikasi memakai **Bearer token** (disimpan di `localStorage` frontend); hanya URL `/api/media/` yang membawa token via query `?auth=` karena `<img>`/`<iframe>` tidak bisa mengirim header. URL eksternal tidak diberi token.
 - **Admin** (kolom `is_admin`) mendapat menu tambahan: Dashboard, Pengguna, Skill, Settings.
-- **Menu profil** (foto/initial di header) membuka **Pengaturan akun** (ubah nama, email, password sendiri lewat `PUT /api/profile`; ganti password wajib menyertakan password saat ini) dan **Keluar**.
+- **Menu profil** (foto/initial di header) membuka **Pengaturan akun** (ubah nama, email, NIP, jabatan, dan password sendiri lewat `PUT /api/profile`; ganti password wajib menyertakan password saat ini) dan **Keluar**. NIP dan jabatan yang diisi dipakai pada tanda tangan Laporan Kinerja.
 - **Tema tampilan** (palet terang & gelap) diatur admin di Settings dan berlaku **untuk semua pengguna** (tersimpan di tabel `settings`; `POST /api/settings` khusus admin, `GET` tetap terbuka). Toggle mode gelap/terang tetap per pengguna.
 
 ## Struktur Proyek
@@ -308,7 +308,7 @@ docker-compose.yml
 
 Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 
-- **Auth:** `POST /api/login`, `GET /api/me`, `PUT /api/profile` (nama/email/password sendiri), `POST /api/logout`
+- **Auth:** `POST /api/login`, `GET /api/me`, `PUT /api/profile` (nama/email/NIP/jabatan/password sendiri), `POST /api/logout`
 - **Sessions:** `GET|POST /api/sessions`, `PUT|DELETE /api/sessions/{id}`
 - **Chat:** `POST /api/chat` (streaming SSE)
 - **Media:** `GET|POST /api/media`, `GET|DELETE /api/media/{id}` (pratinjau inline; `?download=1` untuk unduh), `POST /api/media/{id}/pdf` (konversi berkas ke PDF)
@@ -318,7 +318,7 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - **Suara (TTS/STT):** `GET /api/tts/voices` (daftar model suara), `POST /api/tts` (`{text, voice?, speed?}` → `audio/wav`), `POST /api/stt` (unggah audio → `{text, language}`, sinkron untuk Mode Suara)
 - **Todo:** `GET|POST /api/todos`, `POST /api/todos/{id}/complete`, `PUT|DELETE /api/todos/{id}`
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
-- **Laporan Kinerja:** `GET /api/performance/plans`, `GET|POST /api/performance/report` (`?month=YYYY-MM`), `POST /api/performance/templates/{key}`
+- **Laporan Kinerja:** `GET /api/performance/plans`, `GET|POST /api/performance/report` (`?month=YYYY-MM`; POST juga menerima `pimpinan_nama`, `pimpinan_jabatan`, `pimpinan_nip`), `POST /api/performance/templates/{key}`
 - **Settings:** `GET /api/settings` (semua user), `POST /api/settings` (**admin**)
 - **Admin:** `GET /api/analytics`, `GET /api/skills`, `GET|POST /api/users`, `PUT|DELETE /api/users/{id}`
 
@@ -339,7 +339,8 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - Ekstrak MP3 berjalan sinkron dan menormalkan audio ke **44100 Hz / stereo** (menghindari laju sampling langka yang ditolak encoder MP3); video panjang memakai waktu lebih lama.
 - Hari libur dari `date-holidays` hanya mencakup libur nasional (`public`); cuti bersama tidak termasuk.
 - Acara berulang di-expand di sisi klien (maks 400 kejadian per event); edit/hapus berlaku untuk **seluruh seri**, bukan satu kejadian.
-- Pencarian & filter Gallery berjalan di sisi klien (memuat seluruh daftar media).
+- Pencarian/filter Gallery, pencarian Skill, dan filter tanggal Todo berjalan di sisi klien karena seluruh data sudah dimuat.
+- Nama, jabatan, dan NIP pimpinan pada Laporan Kinerja diisi ulang tiap generate dan tidak disimpan; NIP/jabatan pengguna sendiri tersimpan di profil.
 - Token media dikirim lewat query `?auth=` (keterbatasan `<img>`/`<iframe>`), sehingga bisa muncul di log akses.
 - Notifikasi diambil lewat **polling 3 detik** (bersamaan dengan poll antrean), bukan SSE/WebSocket: cukup untuk volume sekarang tanpa infrastruktur streaming. Di tab yang tidak aktif, browser men-throttle timer (bisa jadi ~1 menit), jadi notifikasi OS bisa tertunda; upgrade ke Service Worker + Push API untuk notifikasi instan.
 - Notifikasi tidak dibuat untuk aksi `ACTION:` (TODO/DOC_BUILD/GENERATE_PPTX) karena semuanya dieksekusi sinkron di dalam request chat — hasilnya sudah tampil di balasan.
