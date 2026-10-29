@@ -26,6 +26,18 @@ const relDate = (iso) => {
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
+const searchDate = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return [
+    d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+    d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+    d.toLocaleDateString('id-ID'),
+    String(iso).slice(0, 10),
+  ].join(' ');
+};
+
 const isImage = (m) => m.mime && m.mime.startsWith('image/');
 const isPdf = (m) => m.mime === 'application/pdf';
 const isAudio = (m) => m.mime && m.mime.startsWith('audio/');
@@ -70,6 +82,7 @@ export default function Gallery() {
   const [filter, setFilter] = useState('all');
   const [type, setType] = useState('all');
   const [q, setQ] = useState('');
+  const [sort, setSort] = useState('newest');
   const [view, setView] = useState(() => localStorage.getItem('gallery-view') || 'grid');
   const [selected, setSelected] = useState(null);
   const [converting, setConverting] = useState(false);
@@ -135,12 +148,18 @@ export default function Gallery() {
   ];
 
   const query = q.trim().toLowerCase();
-  const visible = items.filter((m) => {
-    if (filter !== 'all' && m.role !== filter) return false;
-    if (type !== 'all' && categorize(m) !== type) return false;
-    if (query && !`${m.filename || ''} ${m.session_title || ''}`.toLowerCase().includes(query)) return false;
-    return true;
-  });
+  const visible = items
+    .filter((m) => {
+      if (filter !== 'all' && m.role !== filter) return false;
+      if (type !== 'all' && categorize(m) !== type) return false;
+      if (query && !`${m.filename || ''} ${m.session_title || ''} ${searchDate(m.created_at)}`.toLowerCase().includes(query)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const at = Date.parse(a.created_at) || 0;
+      const bt = Date.parse(b.created_at) || 0;
+      return sort === 'oldest' ? at - bt : bt - at;
+    });
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -180,7 +199,7 @@ export default function Gallery() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Cari nama file atau percakapan..."
+            placeholder="Cari nama file, percakapan, atau tanggal..."
             className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
           />
         </div>
@@ -192,6 +211,15 @@ export default function Gallery() {
           {typeOptions.map((t) => (
             <option key={t.key} value={t.key}>{t.label}</option>
           ))}
+        </select>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value)}
+          aria-label="Urutkan media"
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-brand-800"
+        >
+          <option value="newest">Tanggal terbaru</option>
+          <option value="oldest">Tanggal terlama</option>
         </select>
         <div className="flex gap-1 rounded-xl bg-cream p-1 dark:bg-brand-900">
           <button

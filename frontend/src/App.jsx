@@ -360,6 +360,15 @@ function PlusIcon() {
   );
 }
 
+function PencilIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
 function TrashIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -662,7 +671,7 @@ function SlidesIcon() {
 
 function QueueIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
       <line x1="8" x2="21" y1="6" y2="6" />
       <line x1="8" x2="21" y1="12" y2="12" />
       <line x1="8" x2="21" y1="18" y2="18" />
@@ -688,6 +697,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [activeId, setActiveId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
   // Desktop langsung terbuka penuh; mobile mulai dengan drawer tertutup.
   const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
   const [page, setPage] = useState('chat');
@@ -712,9 +723,9 @@ export default function App() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  // Grup menu bisa dibuka/tutup: default semua tertutup kecuali Percakapan,
+  // Grup menu bisa dibuka/tutup: default semua tertutup,
   // plus grup yang berisi menu aktif ikut terbuka saat halaman berganti.
-  const [openGroups, setOpenGroups] = useState({ utama: false, alat: false, percakapan: true, admin: false });
+  const [openGroups, setOpenGroups] = useState({ utama: false, alat: false, admin: false });
   const toggleGroup = (key) => setOpenGroups((g) => ({ ...g, [key]: !g[key] }));
 
   useEffect(() => {
@@ -984,13 +995,49 @@ export default function App() {
       .then((session) => {
         setSessions((prev) => [...prev, session]);
         setActiveId(session.id);
+        closeMobileSidebar();
       })
       .catch(() => {});
   };
 
+  const closeMobileSidebar = () => {
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  };
+
+  const goTo = (next) => {
+    setPage(next);
+    closeMobileSidebar();
+  };
+
   const selectSession = (id) => {
+    setPage('chat');
     setActiveId(id);
-    setSidebarOpen(false);
+    setEditingId(null);
+    closeMobileSidebar();
+  };
+
+  const startRename = (session) => {
+    setEditingId(session.id);
+    setEditTitle(session.title || '');
+  };
+
+  const cancelRename = () => {
+    setEditingId(null);
+    setEditTitle('');
+  };
+
+  const saveRename = async (session) => {
+    const name = editTitle.trim().slice(0, 60);
+    cancelRename();
+    if (!name || name === session.title) return;
+    try {
+      const updated = await api(`/api/sessions/${session.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ title: name }),
+        success: 'Nama percakapan diperbarui.',
+      });
+      setSessions((prev) => prev.map((s) => (s.id === session.id ? { ...s, title: updated.title } : s)));
+    } catch {}
   };
 
   const removeSession = async (id) => {
@@ -1236,33 +1283,36 @@ export default function App() {
             <PlusIcon />
             <span className={rail ? 'lg:hidden' : ''}>New chat</span>
           </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="lg:shrink-0">
           <NavGroup label="Utama" open={openGroups.utama} onToggle={() => toggleGroup('utama')} rail={rail}>
             <div className="space-y-1">
-              <NavButton active={page === 'chat'} onClick={() => setPage('chat')} icon={<ChatIcon />} label="Chat" rail={rail} />
+              <NavButton active={page === 'chat'} onClick={() => goTo('chat')} icon={<ChatIcon />} label="Chat" rail={rail} />
               <NavButton
                 active={page === 'gallery'}
-                onClick={() => setPage('gallery')}
+                onClick={() => goTo('gallery')}
                 icon={<ImageSquareIcon />}
                 label="Gallery"
                 rail={rail}
               />
               <NavButton
                 active={page === 'todos'}
-                onClick={() => setPage('todos')}
+                onClick={() => goTo('todos')}
                 icon={<TodoIcon />}
                 label="Todo List"
                 rail={rail}
               />
               <NavButton
                 active={page === 'calendar'}
-                onClick={() => setPage('calendar')}
+                onClick={() => goTo('calendar')}
                 icon={<CalendarIcon />}
                 label="Kalender"
                 rail={rail}
               />
               <NavButton
                 active={page === 'performance'}
-                onClick={() => setPage('performance')}
+                onClick={() => goTo('performance')}
                 icon={<ReportIcon />}
                 label="Laporan Kinerja"
                 rail={rail}
@@ -1274,106 +1324,61 @@ export default function App() {
             <div className="space-y-1">
               <NavButton
                 active={page === 'transcribe'}
-                onClick={() => setPage('transcribe')}
+                onClick={() => goTo('transcribe')}
                 icon={<MicIcon />}
                 label="Transkrip"
                 rail={rail}
               />
               <NavButton
                 active={page === 'notulensi'}
-                onClick={() => setPage('notulensi')}
+                onClick={() => goTo('notulensi')}
                 icon={<NotesIcon />}
                 label="Notulensi"
                 rail={rail}
               />
               <NavButton
                 active={page === 'convert'}
-                onClick={() => setPage('convert')}
+                onClick={() => goTo('convert')}
                 icon={<ConvertIcon />}
                 label="ConvertToAudio"
                 rail={rail}
               />
               <NavButton
                 active={page === 'presentasi'}
-                onClick={() => setPage('presentasi')}
+                onClick={() => goTo('presentasi')}
                 icon={<SlidesIcon />}
                 label="Presentasi"
                 rail={rail}
               />
-              <NavButton
-                active={page === 'queue'}
-                onClick={() => setPage('queue')}
-                icon={<QueueIcon />}
-                label="Antrean"
-                badge={activeCount}
-                rail={rail}
-              />
             </div>
           </NavGroup>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2">
-          {!rail && page === 'chat' && (
-            <NavGroup label="Percakapan" open={openGroups.percakapan} onToggle={() => toggleGroup('percakapan')} rail={rail}>
-            {sessions.map((session) => (
-              <div
-                key={session.id}
-                onClick={() => selectSession(session.id)}
-                className={`group mb-1 flex cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm transition ${
-                  session.id === activeId
-                    ? 'bg-slate-200 font-medium dark:bg-brand-900'
-                    : 'text-slate-600 hover:bg-cream dark:text-slate-300 dark:hover:bg-brand-800/60'
-                }`}
-              >
-                <span className="min-w-0 truncate">{session.title}</span>
-                <button
-                  type="button"
-                  aria-label={`Delete ${session.title}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeSession(session.id);
-                  }}
-                  className="shrink-0 rounded-md p-1 text-slate-400 opacity-0 transition hover:text-blush group-hover:opacity-100"
-                >
-                  <TrashIcon />
-                </button>
-              </div>
-            ))}
-            {sessions.length === 0 && (
-              <p className="px-3 py-4 text-center text-xs text-slate-400 dark:text-slate-500">
-                Belum ada percakapan.
-              </p>
-            )}
-            </NavGroup>
-          )}
-        </div>
-        <div className="border-t border-slate-200 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-slate-800">
           {isAdmin && (
             <NavGroup label="Admin" open={openGroups.admin} onToggle={() => toggleGroup('admin')} rail={rail}>
               <div className="space-y-1">
                 <NavButton
                   active={page === 'dashboard'}
-                  onClick={() => setPage('dashboard')}
+                  onClick={() => goTo('dashboard')}
                   icon={<ChartIcon />}
                   label="Dashboard"
                   rail={rail}
                 />
                 <NavButton
                   active={page === 'users'}
-                  onClick={() => setPage('users')}
+                  onClick={() => goTo('users')}
                   icon={<UsersIcon />}
                   label="Pengguna"
                   rail={rail}
                 />
                 <NavButton
                   active={page === 'skills'}
-                  onClick={() => setPage('skills')}
+                  onClick={() => goTo('skills')}
                   icon={<SparklesIcon />}
                   label="Skill"
                   rail={rail}
                 />
                 <NavButton
                   active={page === 'settings'}
-                  onClick={() => setPage('settings')}
+                  onClick={() => goTo('settings')}
                   icon={<GearIcon />}
                   label="Settings"
                   rail={rail}
@@ -1381,6 +1386,129 @@ export default function App() {
               </div>
             </NavGroup>
           )}
+          </div>
+          <div>
+            <div className="mx-2 my-2 border-t border-slate-200 dark:border-slate-800" />
+            {sessions.map((session) =>
+              rail ? (
+                <button
+                  key={session.id}
+                  type="button"
+                  onClick={() => selectSession(session.id)}
+                  onDoubleClick={() => {
+                    setSidebarOpen(true);
+                    startRename(session);
+                  }}
+                  title={`${session.title} (klik dua kali untuk ubah nama)`}
+                  aria-label={`Buka ${session.title}`}
+                  className={`mb-1 flex w-full items-center justify-center rounded-xl p-2 transition ${
+                    session.id === activeId
+                      ? 'bg-slate-200 dark:bg-brand-900'
+                      : 'hover:bg-cream dark:hover:bg-brand-800/60'
+                  }`}
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-skyblue/30 text-[11px] font-semibold uppercase text-brand-700 dark:bg-brand-700 dark:text-skyblue">
+                    {session.title?.trim()?.[0] || '#'}
+                  </span>
+                </button>
+              ) : (
+                <div
+                  key={session.id}
+                  onClick={editingId === session.id ? undefined : () => selectSession(session.id)}
+                  className={`group mb-1 flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm transition ${
+                    editingId === session.id ? 'cursor-default' : 'cursor-pointer'
+                  } ${
+                    session.id === activeId
+                      ? 'bg-slate-200 font-medium dark:bg-brand-900'
+                      : 'text-slate-600 hover:bg-cream dark:text-slate-300 dark:hover:bg-brand-800/60'
+                  }`}
+                >
+                  {editingId === session.id ? (
+                    <>
+                      <input
+                        autoFocus
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            saveRename(session);
+                          }
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelRename();
+                          }
+                        }}
+                        maxLength={60}
+                        aria-label="Nama percakapan"
+                        className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1 outline-none focus:border-brand dark:border-slate-600 dark:bg-brand-800 dark:focus:border-skyblue"
+                      />
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          aria-label="Simpan nama percakapan"
+                          title="Simpan"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            saveRename(session);
+                          }}
+                          className="rounded-md p-1 text-base leading-none text-slate-600 transition hover:opacity-70 dark:text-slate-300"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Batal ubah nama"
+                          title="Batal"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelRename();
+                          }}
+                          className="rounded-md p-1 text-base leading-none text-slate-400 transition hover:text-blush"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="min-w-0 truncate">{session.title}</span>
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          aria-label={`Ubah nama ${session.title}`}
+                          title="Ubah nama"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startRename(session);
+                          }}
+                          className="shrink-0 rounded-md p-1 text-slate-400 opacity-0 transition hover:text-brand group-hover:opacity-100 dark:hover:text-skyblue"
+                        >
+                          <PencilIcon />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${session.title}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeSession(session.id);
+                          }}
+                          className="shrink-0 rounded-md p-1 text-slate-400 opacity-0 transition hover:text-blush group-hover:opacity-100"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </span>
+                    </>
+                  )}
+                </div>
+              )
+            )}
+            {sessions.length === 0 && !rail && (
+              <p className="px-3 py-4 text-center text-xs text-slate-400 dark:text-slate-500">
+                Belum ada percakapan.
+              </p>
+            )}
+          </div>
         </div>
       </aside>
 
@@ -1437,6 +1565,24 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => goTo('queue')}
+                aria-label="Antrean proses"
+                title={runningTask ? `Antrean proses (${runningTask.progress}%)` : 'Antrean proses'}
+                className={`relative rounded-lg p-2 transition hover:bg-cream dark:hover:bg-brand-800 ${
+                  page === 'queue'
+                    ? 'bg-skyblue/30 text-brand dark:bg-brand-800 dark:text-white'
+                    : 'text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                <QueueIcon />
+                {activeCount > 0 && (
+                  <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[0.6rem] font-semibold text-white dark:bg-skyblue dark:text-brand-900">
+                    {activeCount > 9 ? '9+' : activeCount}
+                  </span>
+                )}
+              </button>
               <NotificationBell
                 items={notifs}
                 unread={unread}
@@ -1444,17 +1590,6 @@ export default function App() {
                 onReadAll={markAllNotificationsRead}
                 onOpen={openNotification}
               />
-              {activeCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setPage('queue')}
-                  title="Lihat antrean proses"
-                  className="mr-1 flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-cream dark:border-slate-700 dark:text-slate-300 dark:hover:bg-brand-800"
-                >
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-brand dark:bg-skyblue" />
-                  {runningTask ? `${runningTask.progress}%` : `${activeCount} antre`}
-                </button>
-              )}
               <ProfileMenu
                 user={user}
                 isAdmin={isAdmin}

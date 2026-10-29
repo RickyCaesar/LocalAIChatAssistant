@@ -26,6 +26,13 @@ const fmtDue = (iso) =>
     ? new Date(iso).toLocaleString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
     : '';
 
+const dayKey = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
 const input =
   'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue';
 
@@ -117,6 +124,8 @@ export default function TodoList() {
   const [todos, setTodos] = useState([]);
   const [form, setForm] = useState(blank);
   const [filter, setFilter] = useState('semua');
+  const [day, setDay] = useState('');
+  const [sort, setSort] = useState('nearest');
   const [editing, setEditing] = useState(null);
   const [options, setOptions] = useState({ plans: [], media: [] });
   const [loading, setLoading] = useState(true);
@@ -215,7 +224,18 @@ export default function TodoList() {
   const open = todos.filter((t) => !t.done).length;
   const overdue = todos.filter((t) => !t.done && t.due_at && new Date(t.due_at) < new Date());
 
-  const shown = todos.filter((t) => (filter === 'aktif' ? !t.done : filter === 'selesai' ? t.done : true));
+  const shown = todos
+    .filter((t) => (filter === 'aktif' ? !t.done : filter === 'selesai' ? t.done : true))
+    .filter((t) => !day || dayKey(t.due_at) === day)
+    .sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      const at = a.due_at ? new Date(a.due_at).getTime() : null;
+      const bt = b.due_at ? new Date(b.due_at).getTime() : null;
+      if (at === null && bt === null) return b.id - a.id;
+      if (at === null) return 1;
+      if (bt === null) return -1;
+      return sort === 'farthest' ? bt - at : at - bt;
+    });
 
   const tabs = [
     { key: 'semua', label: `Semua (${todos.length})` },
@@ -384,27 +404,48 @@ export default function TodoList() {
         {metaFields(form, setForm)}
       </form>
 
-      <div className="mt-4 flex items-center gap-1 rounded-xl bg-cream p-1 dark:bg-brand-900">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setFilter(t.key)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              filter === t.key ? 'bg-white shadow-sm dark:bg-brand-600' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
-            }`}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1 rounded-xl bg-cream p-1 dark:bg-brand-900">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setFilter(t.key)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                filter === t.key ? 'bg-white shadow-sm dark:bg-brand-600' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            aria-label="Cari tanggal kegiatan"
+            title="Cari berdasarkan tanggal kegiatan"
+            className={input}
+          />
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            aria-label="Urutkan todo"
+            className={input}
           >
-            {t.label}
-          </button>
-        ))}
-        {overdue.length > 0 && <span className="ml-auto pr-2 text-xs font-medium text-red-500">{overdue.length} terlambat</span>}
+            <option value="nearest">Tanggal paling awal</option>
+            <option value="farthest">Tanggal paling akhir</option>
+          </select>
+          {overdue.length > 0 && <span className="pr-2 text-xs font-medium text-red-500">{overdue.length} terlambat</span>}
+        </div>
       </div>
 
       {loading ? (
         <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">Loading...</p>
       ) : shown.length === 0 ? (
         <p className="mt-16 text-center text-sm text-slate-400 dark:text-slate-500">
-          {filter === 'semua' ? 'Belum ada tugas. Tambahkan di atas, atau minta Hermes mencatatnya lewat chat.' : 'Tidak ada tugas di filter ini.'}
+          {filter === 'semua' && !day ? 'Belum ada tugas. Tambahkan di atas, atau minta Hermes mencatatnya lewat chat.' : 'Tidak ada tugas di filter ini.'}
         </p>
       ) : (
         <ul className="mt-4 space-y-2">
