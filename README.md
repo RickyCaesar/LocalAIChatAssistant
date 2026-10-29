@@ -2,11 +2,13 @@
 
 Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lokal. Selain chat streaming, aplikasi ini menangani berkas (unggah, pratinjau, OCR, transkripsi audio), manajemen tugas & kalender, catatan rapat (notulensi), serta otomasi dokumen (spreadsheet). Proses berat seperti transkripsi audio, konversi video→MP3, dan penyusunan notulensi AI dijalankan **asinkron di antrean (queue)** oleh container worker terpisah, dengan progres dan estimasi selesai yang bisa dipantau dari menu **Antrean**. Frontend dan backend di-containerisasi dengan Docker Compose.
 
+> **Cabang `feature/clamav-scanner`.** Branch ini khusus untuk integrasi ClamAV dan dipisahkan dari proyek utama (`main`) sebagai referensi. Fitur pemindaian ClamAV hanya ada di branch ini; gunakan `main` bila tidak membutuhkannya.
+
 ## Fitur
 
 - **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** di bubble, dan **pemisah tanggal** (Hari ini/Kemarin/tanggal lengkap) muncul sebelum pesan pertama tiap hari. Sesi bisa diganti namanya langsung dari sidebar (ikon pensil) dan tetap tampil di sidebar compact.
 - **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), menyusun presentasi (PPTX) bertema, serta mengirim berkas hasil olahan. Hermes selalu diberi **waktu sekarang (WITA) + tanggal hari ini & besok**, jadi permintaan seperti "jadwalkan besok jam 9" menghasilkan tanggal yang tepat.
-- **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
+- **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh. Semua unggahan dipindai **ClamAV** sebelum validasi; berkas terinfeksi ditolak dengan modal peringatan dan notifikasi.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
 - **Konversi video ke MP3** (menu **ConvertToAudio**): video (MP4/MKV/MOV/…) atau berkas audio lain → MP3. Memakai PyAV (venv STT yang sudah ada), jadi tak perlu `ffmpeg` sistem. Diproses **asinkron di antrean**.
 - **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pencarian** nama berkas/percakapan/tanggal, **urutan tanggal** terbaru/terlama, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
@@ -29,6 +31,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 - **Frontend:** React (Vite), Tailwind CSS, react-markdown
 - **Backend:** PHP + Laravel (HTTP Client, SQLite)
+- **Antivirus:** ClamAV (`clamd`) di container terpisah; backend mengirim berkas lewat protokol `zINSTREAM`
 - **Antrean:** Laravel Queue dengan driver `database`, dijalankan oleh container `queue-worker` (`php artisan queue:work`). Job `App\Jobs\RunTask` menangani convert/transcribe/notulensi; progres disimpan di tabel `tasks`.
 - **STT & audio:** faster-whisper (CPU, `int8`) untuk transkripsi; PyAV untuk ekstraksi audio → MP3. Keduanya memancarkan progres ke job.
 - **TTS:** Piper (CPU, `piper-tts` di venv `/opt/stt`). Model suara id_ID (~63 MB) sudah di-bake ke image di `/opt/tts/voices`; TTS untuk voice mode dipanggil **sinkron** (`POST /api/tts`), hasil WAV di-cache di `storage/app/private/tts`.
@@ -61,6 +64,8 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
    ```bash
    docker compose up -d --build
    ```
+
+   Compose juga menyalakan `clamav`. Saat pertama kali, image dan signature diunduh (butuh internet dan RAM ±2 GB); tunggu sampai `docker compose ps` menunjukkan `clamav` **healthy** sebelum menguji unggahan.
 
 4. Buat admin pertama (tidak ada registrasi publik):
 
@@ -131,6 +136,9 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 | `HERMES_OUTPUT_HOST` | `.../storage/app/private/hermes-output` | folder keluaran berkas agent; hanya folder ini yang diimpor |
 | `HERMES_AUTH_FILE` | `/home/ROG/.hermes/auth.json` | (opsional) berkas kredensial Hermes; dipakai kartu kuota/kredit di Dashboard |
 | `CORS_ALLOWED_ORIGINS` | `*` | origin yang diizinkan |
+| `CLAMAV_ENABLED` | `true` | pindai unggahan dengan clamd; `false` melewati pemindaian |
+| `CLAMAV_HOST` | `clamav` | hostname service clamd di Compose |
+| `CLAMAV_PORT` | `3310` | port clamd |
 | `QUEUE_CONNECTION` | `database` | driver antrean; proses berat dijalankan oleh `queue-worker` |
 | `DB_QUEUE_RETRY_AFTER` | `3660` | kapan job yang macet dianggap hilang dan boleh di-retry; dengan satu worker cukup, tapi naikkan bila menambah worker dan `ai_timeout` > 3600 |
 | `TTS_ENGINE` | `piper` | mesin TTS lokal (saat ini hanya `piper`) |
@@ -273,6 +281,7 @@ Perekaman mikrofon butuh **secure context**: `localhost` atau HTTPS — dari HP 
 backend/            Laravel API
   .env.example                contoh konfigurasi (salin ke .env)
   app/Http/Controllers/Api/   Auth, Chat, Media, Queue, Todo, Event, PerformanceReport, User, Skill, AI, Notification
+  app/Http/Middleware/ScanUploads.php  pindai semua berkas request sebelum validasi
   app/Jobs/RunTask.php        job antrean generik (convert / transcribe / notulensi / pptx)
   app/Models/Task.php         status, progress & hasil tiap tugas antrean
   app/Support/Eta.php         rumus estimasi selesai (elapsed/progress)
@@ -283,13 +292,15 @@ backend/            Laravel API
                               PerformanceReportBuilder (laporan kinerja bulanan PDF),
                               TodoEventSync (sinkronisasi dua arah Todo ↔ Kalender),
                               MarpGenerator (Marp Markdown → PPTX via marp-cli + Chromium),
-                              NotificationService (notifikasi in-app dari task antrean)
+                              NotificationService (notifikasi in-app dari task antrean),
+                              ClamAVScanner (stream berkas ke clamd)
   resources/marp/notebook.css tema Marp (variabel warna di-inject dari pilihan tema)
   stt/transcribe.py           skrip faster-whisper (memancarkan progres)
   stt/toaudio.py              ekstrak audio → MP3 via PyAV (memancarkan progres)
   tests/document_builder_check.php  self-check penulis XLSX (php, tanpa framework)
   tests/notulen_builder_check.php  self-check penulis DOCX notulen (php, tanpa framework)
   tests/eta_check.php         self-check rumus ETA (php, tanpa framework)
+  tests/clamav_check.php      self-check ClamAV: berkas bersih & EICAR (php, butuh service clamav)
   tests/profile_check.php     self-check endpoint profil + proteksi settings (php, butuh DB)
   tests/performance_check.php self-check sinkronisasi Todo/Kalender, template, matriks & PDF laporan (php, butuh DB)
   tests/timezone_check.php    self-check WITA: konteks Hermes, "besok", konversi ISO client (php, butuh DB)
@@ -328,6 +339,7 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - Persentase progres transkripsi/konversi berasal dari posisi segmen/frame terhadap durasi berkas; untuk notulensi AI, persentase adalah estimasi berbasis waktu (konstanta throughput di `RunTask::runNotulensiStream`, bisa dikalibrasi).
 - Laporan Kinerja menghitung Todo ber-indikator dan acara Kalender ber-indikator yang belum tertaut Todo (yang tertaut dihitung sekali lewat Todo). Kegiatan tanpa indikator tidak masuk matriks. Template bulanan dibuat pada tanggal 1 pukul 09:00 dan dapat dibuat ulang bila tombolnya diklik lagi.
 - OCR dan ekstraksi teks (gambar/dokumen) masih dilakukan **sinkron saat unggah**; berkas besar atau deck banyak slide bisa membuat unggahan lambat.
+- Pemindaian ClamAV bersifat **fail-open**: bila `CLAMAV_ENABLED=false` atau clamd tidak bisa dihubungi, unggahan tetap diproses dan hanya dicatat di log. Ini sengaja agar aplikasi tidak mati saat signature masih dimuat; untuk keamanan ketat, ubah `ClamAVScanner` menjadi gagal-tertutup dan pantau log.
 - `php artisan serve` berjalan dengan `PHP_CLI_SERVER_WORKERS=4` (fork bawaan PHP), jadi satu request berat yang belum dipindah ke antrean tidak membekukan healthcheck/API — sisanya menunggu worker kosong. Cukup untuk pemakaian lokal. Laravel hanya mengaktifkan ini dengan flag `--no-reload` (lihat `Dockerfile`); konsekuensinya, mengubah `backend/.env` butuh restart container, bukan auto-reload.
 - Server dan `queue-worker` berbagi **satu file SQLite** yang di-mount sebagai file tunggal; karena itu mode jurnal dipaksa `delete` (bukan WAL) + `busy_timeout` 5s agar tidak "database is locked". Untuk konkurensi lebih berat, pindahkan DB ke direktori bersama (agar WAL bisa dipakai) atau ke Postgres.
 - `DocumentBuilder` menghasilkan XLSX minimal (tabel/daftar berjudul, header tebal) tanpa rumus/grafik/pivot, dan hanya mendukung `.xlsx`.
