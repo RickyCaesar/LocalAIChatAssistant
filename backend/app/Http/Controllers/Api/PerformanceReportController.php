@@ -238,6 +238,11 @@ class PerformanceReportController extends Controller
         $snapshot = $this->snapshot($user->id, $start, $end);
         $data = $snapshot['data'];
         $catatan = $request->input('catatan');
+        $pimpinan = $request->validate([
+            'pimpinan_nama' => 'nullable|string|max:100',
+            'pimpinan_jabatan' => 'nullable|string|max:100',
+            'pimpinan_nip' => 'nullable|string|max:30',
+        ]);
 
         $matrix = [[
             ['text' => 'No.', 'bold' => true],
@@ -339,6 +344,10 @@ class PerformanceReportController extends Controller
                 'name' => $user->name ?: '-',
                 'jabatan' => $user->jabatan ?: ($user->role ?: '-'),
                 'date' => Carbon::now('Asia/Makassar')->locale('id')->translatedFormat('l, d F Y'),
+                'nip' => $user->nip,
+                'pimpinan_nama' => trim((string) ($pimpinan['pimpinan_nama'] ?? '')),
+                'pimpinan_jabatan' => trim((string) ($pimpinan['pimpinan_jabatan'] ?? '')),
+                'pimpinan_nip' => trim((string) ($pimpinan['pimpinan_nip'] ?? '')),
             ],
         ], $user->id);
 

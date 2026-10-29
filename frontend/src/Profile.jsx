@@ -8,6 +8,8 @@ const card = 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-b
 export default function Profile({ user, onUserChange }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [nip, setNip] = useState('');
+  const [jabatan, setJabatan] = useState('');
   const [profileMsg, setProfileMsg] = useState(null);
   const [profileError, setProfileError] = useState(null);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -22,6 +24,8 @@ export default function Profile({ user, onUserChange }) {
     if (!user) return;
     setName(user.name || '');
     setEmail(user.email || '');
+    setNip(user.nip || '');
+    setJabatan(user.jabatan || '');
   }, [user]);
 
   const saveProfile = async (e) => {
@@ -32,7 +36,7 @@ export default function Profile({ user, onUserChange }) {
     try {
       const data = await api('/api/profile', {
         method: 'PUT',
-        body: JSON.stringify({ name, email }),
+        body: JSON.stringify({ name, email, nip, jabatan }),
         success: 'Profil berhasil disimpan.',
       });
       onUserChange(data.user);
@@ -69,7 +73,7 @@ export default function Profile({ user, onUserChange }) {
     <div className="mx-auto max-w-3xl px-4 py-6">
       <h2 className="text-lg font-semibold">Pengaturan Akun</h2>
       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-        Ubah nama, email, dan password akunmu sendiri.
+        Ubah nama, email, NIP, jabatan, dan password akunmu sendiri.
       </p>
 
       <form onSubmit={saveProfile} className={`mt-4 ${card}`}>
@@ -98,6 +102,34 @@ export default function Profile({ user, onUserChange }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className={input}
+            />
+          </div>
+          <div>
+            <label htmlFor="profile-nip" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+              NIP
+            </label>
+            <input
+              id="profile-nip"
+              type="text"
+              value={nip}
+              onChange={(e) => setNip(e.target.value)}
+              placeholder="NIP (opsional)"
+              maxLength={30}
+              className={input}
+            />
+          </div>
+          <div>
+            <label htmlFor="profile-jabatan" className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+              Jabatan
+            </label>
+            <input
+              id="profile-jabatan"
+              type="text"
+              value={jabatan}
+              onChange={(e) => setJabatan(e.target.value)}
+              placeholder="Jabatan (opsional)"
+              maxLength={100}
               className={input}
             />
           </div>

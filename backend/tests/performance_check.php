@@ -56,6 +56,11 @@ try {
     $token = $user->api_token;
     $month = now()->format('Y-m');
 
+    [$status, $body] = $call('PUT', '/api/profile', $token, ['nip' => '198001012005011001', 'jabatan' => 'Analis Uji']);
+    if ($status !== 200 || ($body['user']['nip'] ?? null) !== '198001012005011001' || ($body['user']['jabatan'] ?? null) !== 'Analis Uji') {
+        $fail('simpan NIP/jabatan profil gagal', $body);
+    }
+
     [$status, $body] = $call('GET', '/api/performance/plans', $token);
     $plan = $body['plans'][0] ?? null;
     if ($status !== 200 || count($body['plans'] ?? []) !== 5 || ! $plan) {
@@ -222,7 +227,7 @@ try {
         $fail('matriks pengguna kedua memuat indikator pengguna lain', ['plans' => $otherPlanIds->all()]);
     }
 
-    [$status, $body] = $call('POST', '/api/performance/report', $token, ['month' => $month, 'base_url' => 'https://contoh.test']);
+    [$status, $body] = $call('POST', '/api/performance/report', $token, ['month' => $month, 'base_url' => 'https://contoh.test', 'pimpinan_nama' => 'Pimpinan Uji', 'pimpinan_jabatan' => 'Kepala Dinas Uji', 'pimpinan_nip' => '197001011995031002']);
     $reportId = $body['media']['id'] ?? null;
     if ($status !== 201 || ! $reportId) {
         $fail('generate PDF gagal', $body);
@@ -231,7 +236,7 @@ try {
     $full = storage_path('app/private/'.$reportMedia->path);
     $xml = (string) shell_exec('pdftotext '.escapeshellarg($full).' - 2>/dev/null');
     $missing = array_values(array_filter(
-        ['LAPORAN KINERJA BULANAN', 'Uji e-SAKIP revisi', 'Kegiatan Kalender Mandiri', 'Selesai diuji', $plan['name'], 'CATATAN', 'Penanggung Jawab,', 'LAMPIRAN BERKAS', 'Kegiatan 1', 'bukti-check.png', 'bukti-check-2.jpg'],
+        ['LAPORAN KINERJA BULANAN', 'Uji e-SAKIP revisi', 'Kegiatan Kalender Mandiri', 'Selesai diuji', $plan['name'], 'CATATAN', 'Mengetahui,', 'Pimpinan Uji', 'Kepala Dinas Uji', 'NIP. 197001011995031002', 'Penanggung Jawab,', 'NIP. 198001012005011001', 'Analis Uji', 'LAMPIRAN BERKAS', 'Kegiatan 1', 'bukti-check.png', 'bukti-check-2.jpg'],
         fn ($needle) => ! str_contains($xml, $needle)
     ));
     if ($missing !== []) {

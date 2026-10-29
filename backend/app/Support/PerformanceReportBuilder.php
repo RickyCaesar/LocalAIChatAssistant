@@ -84,6 +84,13 @@ class PerformanceReportBuilder
         $signatureRole = self::esc((string) ($signature['jabatan'] ?? ''));
         $signatureDate = self::esc((string) ($signature['date'] ?? ''));
         $signatureRoleHtml = $signatureRole === '' ? '' : '<div class="signature-role">'.$signatureRole.'</div>';
+        $signatureNip = self::esc((string) ($signature['nip'] ?? ''));
+        $signatureNipHtml = $signatureNip === '' ? '' : '<div class="signature-nip">NIP. '.$signatureNip.'</div>';
+        $leaderName = self::esc((string) ($signature['pimpinan_nama'] ?? ''));
+        $leaderRole = self::esc((string) ($signature['pimpinan_jabatan'] ?? ''));
+        $leaderNip = self::esc((string) ($signature['pimpinan_nip'] ?? ''));
+        $leaderRoleHtml = $leaderRole === '' ? '' : '<div class="signature-role">'.$leaderRole.'</div>';
+        $leaderNipHtml = $leaderNip === '' ? '' : '<div class="signature-nip">NIP. '.$leaderNip.'</div>';
 
         $summary = '';
         foreach ($data['summary'] ?? [] as $row) {
@@ -129,7 +136,16 @@ class PerformanceReportBuilder
         }
         $attachmentSection = $attachmentGroups === '' ? '' : '<div class="attachments"><div class="card"><div class="card-title">E. Lampiran Berkas &amp; Dokumentasi</div><div class="attachment-groups">'.$attachmentGroups.'</div></div></div>';
         $noteSection = $note === '' ? '' : '<div class="note-card card"><div class="card-title">D. Catatan</div><div class="note-body">'.$note.'</div></div>';
-        $signatureBlock = $signatureName === '' ? '' : '<div class="signature"><div class="signature-date">'.$signatureDate.'</div><div class="signature-title">Penanggung Jawab,</div><div class="signature-space"></div><div class="signature-name">'.$signatureName.'</div>'.$signatureRoleHtml.'</div>';
+        $pjBlock = $signatureName === '' ? '' : '<div class="signature"><div class="signature-date">'.$signatureDate.'</div><div class="signature-title">Penanggung Jawab,</div><div class="signature-space"></div><div class="signature-name">'.$signatureName.'</div>'.$signatureRoleHtml.$signatureNipHtml.'</div>';
+        $leaderBlock = $leaderName === '' ? '' : '<div class="signature"><div class="signature-date">&nbsp;</div><div class="signature-title">Mengetahui,</div><div class="signature-space"></div><div class="signature-name">'.$leaderName.'</div>'.$leaderRoleHtml.$leaderNipHtml.'</div>';
+        $signatureBlock = '';
+        if ($leaderBlock !== '' && $pjBlock !== '') {
+            $signatureBlock = '<table class="signatures"><tr><td>'.$leaderBlock.'</td><td>'.$pjBlock.'</td></tr></table>';
+        } elseif ($leaderBlock !== '') {
+            $signatureBlock = $leaderBlock;
+        } else {
+            $signatureBlock = $pjBlock;
+        }
 
         return '<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>'.$title.'</title><style>
 @page{size:A4 landscape;margin:10mm}
@@ -149,10 +165,14 @@ table.matrix tr.head td,table.details tr.head td{background:#f8fafc;font-weight:
 .note-card{margin-bottom:12px}
 .note-body{padding:10px 12px;font-size:9px;line-height:1.55;text-align:justify}
 .signature{width:75mm;margin:0 0 10px auto;text-align:center;font-size:8.5px;break-inside:avoid}
+table.signatures{width:100%;margin:0 0 10px;border-collapse:collapse;break-inside:avoid}
+table.signatures td{width:50%;padding:0;vertical-align:top}
+table.signatures .signature{margin:0 auto}
 .signature-date{text-align:center;color:#000;margin-bottom:8px}
 .signature-space{height:16mm}
 .signature-name{font-weight:bold;text-decoration:underline}
 .signature-role{color:#444;margin-top:1px}
+.signature-nip{color:#444;margin-top:1px}
 .attachments{page-break-before:always;break-before:page}
 .attachment-groups{padding:4px 10px 10px}
 .attachment-group{border-top:1.5px solid #111;margin-top:9px;padding-top:6px;break-inside:avoid}

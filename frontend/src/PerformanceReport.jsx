@@ -43,6 +43,9 @@ export default function PerformanceReport() {
   const [viewModal, setViewModal] = useState(null);
   const [savingPlan, setSavingPlan] = useState(false);
   const [catatan, setCatatan] = useState('');
+  const [pimpinanNama, setPimpinanNama] = useState('');
+  const [pimpinanJabatan, setPimpinanJabatan] = useState('');
+  const [pimpinanNip, setPimpinanNip] = useState('');
 
   const load = () => {
     setError(null);
@@ -74,7 +77,18 @@ export default function PerformanceReport() {
     setError(null);
     setDownload(null);
     try {
-      const res = await api('/api/performance/report', { method: 'POST', body: JSON.stringify({ month, catatan, base_url: window.location.origin }), success: 'Laporan PDF berhasil dibuat.' });
+      const res = await api('/api/performance/report', {
+        method: 'POST',
+        body: JSON.stringify({
+          month,
+          catatan,
+          pimpinan_nama: pimpinanNama.trim(),
+          pimpinan_jabatan: pimpinanJabatan.trim(),
+          pimpinan_nip: pimpinanNip.trim(),
+          base_url: window.location.origin,
+        }),
+        success: 'Laporan PDF berhasil dibuat.',
+      });
       setDownload(res.media);
       setNotice('Laporan siap diunduh.');
     } catch (e) {
@@ -179,6 +193,30 @@ export default function PerformanceReport() {
             value={month}
             onChange={(e) => { setMonth(e.target.value); setDownload(null); setNotice(null); }}
             className={input}
+          />
+          <input
+            value={pimpinanNama}
+            onChange={(e) => setPimpinanNama(e.target.value)}
+            placeholder="Nama pimpinan (Mengetahui)"
+            aria-label="Nama pimpinan untuk blok Mengetahui"
+            maxLength={100}
+            className={`${input} w-44`}
+          />
+          <input
+            value={pimpinanJabatan}
+            onChange={(e) => setPimpinanJabatan(e.target.value)}
+            placeholder="Jabatan pimpinan"
+            aria-label="Jabatan pimpinan untuk blok Mengetahui"
+            maxLength={100}
+            className={`${input} w-40`}
+          />
+          <input
+            value={pimpinanNip}
+            onChange={(e) => setPimpinanNip(e.target.value)}
+            placeholder="NIP pimpinan"
+            aria-label="NIP pimpinan untuk blok Mengetahui"
+            maxLength={30}
+            className={`${input} w-36`}
           />
           <button
             type="button"

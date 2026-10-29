@@ -28,7 +28,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $user->api_token,
-            'user' => ['name' => $user->name, 'email' => $user->email, 'is_admin' => $user->is_admin],
+            'user' => ['name' => $user->name, 'email' => $user->email, 'nip' => $user->nip, 'jabatan' => $user->jabatan, 'is_admin' => $user->is_admin],
         ]);
     }
 
@@ -39,6 +39,8 @@ class AuthController extends Controller
                 'id' => auth()->id(),
                 'name' => auth()->user()->name,
                 'email' => auth()->user()->email,
+                'nip' => auth()->user()->nip,
+                'jabatan' => auth()->user()->jabatan,
                 'is_admin' => (bool) auth()->user()->is_admin,
             ],
         ]);
@@ -49,6 +51,8 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => 'sometimes|string|max:100',
             'email' => 'sometimes|email|max:190|unique:users,email,'.auth()->id(),
+            'nip' => 'sometimes|nullable|string|max:30',
+            'jabatan' => 'sometimes|nullable|string|max:100',
             'current_password' => 'required_with:new_password|string',
             'new_password' => 'sometimes|string|min:6',
         ]);
@@ -65,6 +69,14 @@ class AuthController extends Controller
         if (isset($data['email'])) {
             $user->email = $data['email'];
         }
+        if (array_key_exists('nip', $data)) {
+            $nip = trim((string) ($data['nip'] ?? ''));
+            $user->nip = $nip === '' ? null : $nip;
+        }
+        if (array_key_exists('jabatan', $data)) {
+            $jabatan = trim((string) ($data['jabatan'] ?? ''));
+            $user->jabatan = $jabatan === '' ? null : $jabatan;
+        }
         if (isset($data['new_password'])) {
             $user->password = Hash::make($data['new_password']);
         }
@@ -75,6 +87,8 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'nip' => $user->nip,
+                'jabatan' => $user->jabatan,
                 'is_admin' => (bool) $user->is_admin,
             ],
         ]);
