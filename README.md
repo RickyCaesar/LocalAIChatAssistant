@@ -2,6 +2,8 @@
 
 Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lokal. Selain chat streaming, aplikasi ini menangani berkas (unggah, pratinjau, OCR, transkripsi audio), manajemen tugas & kalender, catatan rapat (notulensi), serta otomasi dokumen (spreadsheet). Proses berat seperti transkripsi audio, konversi video→MP3, dan penyusunan notulensi AI dijalankan **asinkron di antrean (queue)** oleh container worker terpisah, dengan progres dan estimasi selesai yang bisa dipantau dari menu **Antrean**. Frontend dan backend di-containerisasi dengan Docker Compose.
 
+> **Branch referensi `feature/clamav-scanner`.** Fitur baru berupa pemindaian unggahan dengan **ClamAV** sengaja dipisahkan dari `main` sebagai referensi. Fungsinya memindai setiap unggahan terautentikasi sebelum validasi, menolak berkas terinfeksi dengan modal peringatan + notifikasi, serta memeriksa sumber media di antrean sebelum diproses. Branch ini tidak digabung ke proyek utama; detail konfigurasi dan batasannya ada di README branch tersebut.
+
 ## Fitur
 
 - **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** di bubble, dan **pemisah tanggal** (Hari ini/Kemarin/tanggal lengkap) muncul sebelum pesan pertama tiap hari. Sesi bisa diganti namanya langsung dari sidebar (ikon pensil) dan tetap tampil di sidebar compact.
