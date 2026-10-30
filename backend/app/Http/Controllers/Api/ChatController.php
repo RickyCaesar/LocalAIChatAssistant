@@ -387,6 +387,7 @@ class ChatController extends Controller
                 'messages' => $messages,
                 'temperature' => (float) env('AI_TEMPERATURE', 0.7),
                 'stream' => true,
+                'stream_options' => ['include_usage' => true],
             ]);
         } catch (\Throwable $e) {
             ChatLog::create(['user_id' => auth()->id(), 'model' => $model, 'status' => 'error']);
@@ -411,6 +412,7 @@ class ChatController extends Controller
         return response()->stream(function () use ($body, $model, $sessionId) {
             $accum = '';
             $fullText = '';
+            $usage = null;
 
             while (! $body->eof()) {
                 $chunk = $body->read(8192);
@@ -439,6 +441,9 @@ class ChatController extends Controller
                     if (is_string($delta)) {
                         $fullText .= $delta;
                     }
+                    if (isset($decoded['usage']) && is_array($decoded['usage'])) {
+                        $usage = $decoded['usage'];
+                    }
                 }
             }
 
@@ -448,6 +453,9 @@ class ChatController extends Controller
                 'user_id' => auth()->id(),
                 'model' => $model,
                 'status' => $fullText === '' ? 'error' : 'ok',
+                'prompt_tokens' => $usage['prompt_tokens'] ?? null,
+                'completion_tokens' => $usage['completion_tokens'] ?? null,
+                'total_tokens' => $usage['total_tokens'] ?? null,
             ]);
 
             echo 'data: '.json_encode(['type' => 'final', 'text' => (string) $final])."\n\n";
