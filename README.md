@@ -23,7 +23,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
 - **Todo**: prioritas, catatan, tenggat + jam, durasi, tindak lanjut, bukti dari Gallery, dan indikator kinerja yang dapat dikelola per pengguna. Daftar bisa difilter per tanggal dan diurutkan berdasarkan tenggat terdekat/terjauh. Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang, filter per indikator, status selesai, serta edit tindak lanjut/bukti langsung dari acara tertaut. Bisa juga dikendalikan dari chat.
-- **Laporan Kinerja Bulanan**: matriks kegiatan/jam/bukti per indikator, total bulanan, indikator yang dikelola per pengguna, template kegiatan bulanan, lalu **generate PDF** berisi ringkasan, matriks, rincian, catatan, tanda tangan, dan lampiran. NIP dan jabatan pengguna diambil dari profil; saat generate dapat diisi nama, jabatan, dan NIP pimpinan untuk blok **"Mengetahui,"** di samping tanda tangan Penanggung Jawab.
+- **Laporan Kinerja Bulanan**: matriks kegiatan/jam/bukti per indikator, total bulanan, indikator yang dikelola per pengguna, template kegiatan bulanan, lalu **generate PDF** berisi ringkasan, matriks, rincian, catatan, tanda tangan, dan lampiran. NIP dan jabatan pengguna diambil dari profil; saat generate dapat diisi nama, jabatan, dan NIP pimpinan untuk blok **"Mengetahui,"** di samping tanda tangan Penanggung Jawab. Orientasi PDF dapat dipilih **Portrait** atau **Landscape**.
 - **Pengaturan**: timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau) yang **berlaku untuk semua pengguna**. Model AI tidak diatur di sini: aplikasi selalu memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes.
 - **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent dengan pencarian nama/kategori/deskripsi.
 - **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik — termasuk **kartu kuota/kredit Hermes**, Kelola Pengguna, Skill, Settings).
@@ -322,7 +322,7 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - **Suara (TTS/STT):** `GET /api/tts/voices` (daftar model suara), `POST /api/tts` (`{text, voice?, speed?}` → `audio/wav`), `POST /api/stt` (unggah audio → `{text, language}`, sinkron untuk Mode Suara)
 - **Todo:** `GET|POST /api/todos`, `POST /api/todos/{id}/complete`, `PUT|DELETE /api/todos/{id}`
 - **Event:** `GET|POST /api/events`, `PUT|DELETE /api/events/{id}`
-- **Laporan Kinerja:** `GET /api/performance/plans`, `GET|POST /api/performance/report` (`?month=YYYY-MM`; POST juga menerima `pimpinan_nama`, `pimpinan_jabatan`, `pimpinan_nip`), `POST /api/performance/templates/{key}`
+- **Laporan Kinerja:** `GET /api/performance/plans`, `GET|POST /api/performance/report` (`?month=YYYY-MM`; POST juga menerima `pimpinan_nama`, `pimpinan_jabatan`, `pimpinan_nip`, `orientation=portrait|landscape`), `POST /api/performance/templates/{key}`
 - **Settings:** `GET /api/settings` (semua user), `POST /api/settings` (**admin**)
 - **Admin:** `GET /api/analytics` (`?days=7|30|90|365` untuk tren), `GET /api/skills`, `GET|POST /api/users`, `PUT|DELETE /api/users/{id}`
 

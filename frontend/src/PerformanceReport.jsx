@@ -46,6 +46,7 @@ export default function PerformanceReport() {
   const [pimpinanNama, setPimpinanNama] = useState('');
   const [pimpinanJabatan, setPimpinanJabatan] = useState('');
   const [pimpinanNip, setPimpinanNip] = useState('');
+  const [orientation, setOrientation] = useState('landscape');
 
   const load = () => {
     setError(null);
@@ -85,6 +86,7 @@ export default function PerformanceReport() {
           pimpinan_nama: pimpinanNama.trim(),
           pimpinan_jabatan: pimpinanJabatan.trim(),
           pimpinan_nip: pimpinanNip.trim(),
+          orientation,
           base_url: window.location.origin,
         }),
         success: 'Laporan PDF berhasil dibuat.',
@@ -194,6 +196,17 @@ export default function PerformanceReport() {
             onChange={(e) => { setMonth(e.target.value); setDownload(null); setNotice(null); }}
             className={input}
           />
+          <label className="text-xs font-medium text-slate-500 dark:text-slate-400" htmlFor="report-orientation">Orientasi</label>
+          <select
+            id="report-orientation"
+            value={orientation}
+            onChange={(e) => setOrientation(e.target.value)}
+            aria-label="Orientasi laporan PDF"
+            className={input}
+          >
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+          </select>
           <input
             value={pimpinanNama}
             onChange={(e) => setPimpinanNama(e.target.value)}

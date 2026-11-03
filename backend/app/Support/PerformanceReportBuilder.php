@@ -23,6 +23,8 @@ class PerformanceReportBuilder
         }
         $path = 'media/'.$userId.'/'.$filename;
         $full = $base.'/'.$filename;
+        $orientation = ($data['orientation'] ?? 'landscape') === 'portrait' ? 'portrait' : 'landscape';
+        $data['orientation'] = $orientation;
 
         $html = self::html($data);
 
@@ -30,7 +32,7 @@ class PerformanceReportBuilder
         if (is_executable('/usr/bin/wkhtmltopdf')) {
             $tmp = $storagePrivate.'/tmp-'.Str::random(8).'.html';
             @file_put_contents($tmp, $html);
-            @shell_exec('/usr/bin/wkhtmltopdf --page-size A4 --orientation Landscape --margin-top 8mm --margin-bottom 8mm --margin-left 8mm --margin-right 8mm '.$tmp.' '.$full.' 2>&1');
+            @shell_exec('/usr/bin/wkhtmltopdf --page-size A4 --orientation '.ucfirst($orientation).' --margin-top 8mm --margin-bottom 8mm --margin-left 8mm --margin-right 8mm '.$tmp.' '.$full.' 2>&1');
             @unlink($tmp);
             $generated = is_file($full) && filesize($full) > 1000;
         }
@@ -51,6 +53,7 @@ class PerformanceReportBuilder
         }
 
         if (! $generated) {
+            // shortcut: fallback PDF minimal selalu landscape; orientasi mengikuti CSS selama Chromium tersedia.
             // minimal valid pdf
             @file_put_contents($full, "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 842 595]/Contents 4 0 R/Resources<</Font<</F1<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>>>>>endobj\n4 0 obj<</Length 80>>stream\nBT/F1 14 Tf 40 550 Td (LAPORAN KINERJA BULANAN) Tj ET\nBT/F1 10 Tf 40 520 Td (Buka file HTML untuk tampilan lengkap) Tj ET\nendstream endobj\nxref\n0 5\n0000000000 65535 f\n0000000009 00000 n\n0000000052 00000 n\n0000000101 00000 n\n0000000220 00000 n\ntrailer<</Size 5/Root 1 0 R>\nstartxref\n348\n%%EOF");
             $generated = true;
@@ -76,6 +79,7 @@ class PerformanceReportBuilder
 
     private static function html(array $data): string
     {
+        $orientation = ($data['orientation'] ?? 'landscape') === 'portrait' ? 'portrait' : 'landscape';
         $title = self::esc($data['title'] ?? 'LAPORAN KINERJA BULANAN');
         $subtitle = self::esc($data['subtitle'] ?? '');
         $note = nl2br(self::esc($data['note'] ?? ''));
@@ -148,7 +152,7 @@ class PerformanceReportBuilder
         }
 
         return '<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>'.$title.'</title><style>
-@page{size:A4 landscape;margin:10mm}
+@page{size:A4 '.$orientation.';margin:10mm}
 *{font-family:Helvetica,Arial,sans-serif}
 body{margin:0;color:#111}
 .wrap{padding:12px}

@@ -242,6 +242,7 @@ class PerformanceReportController extends Controller
             'pimpinan_nama' => 'nullable|string|max:100',
             'pimpinan_jabatan' => 'nullable|string|max:100',
             'pimpinan_nip' => 'nullable|string|max:30',
+            'orientation' => 'nullable|in:portrait,landscape',
         ]);
 
         $matrix = [[
@@ -327,6 +328,7 @@ class PerformanceReportController extends Controller
 
         $media = PerformanceReportBuilder::save([
             'filename' => 'Laporan-Kinerja-'.$start->format('Y-m').'.pdf',
+            'orientation' => $pimpinan['orientation'] ?? 'landscape',
             'title' => 'LAPORAN KINERJA BULANAN',
             'subtitle' => 'Periode '.$data['month_label'],
             'summary' => [

@@ -227,13 +227,17 @@ try {
         $fail('matriks pengguna kedua memuat indikator pengguna lain', ['plans' => $otherPlanIds->all()]);
     }
 
-    [$status, $body] = $call('POST', '/api/performance/report', $token, ['month' => $month, 'base_url' => 'https://contoh.test', 'pimpinan_nama' => 'Pimpinan Uji', 'pimpinan_jabatan' => 'Kepala Dinas Uji', 'pimpinan_nip' => '197001011995031002']);
+    [$status, $body] = $call('POST', '/api/performance/report', $token, ['month' => $month, 'orientation' => 'portrait', 'base_url' => 'https://contoh.test', 'pimpinan_nama' => 'Pimpinan Uji', 'pimpinan_jabatan' => 'Kepala Dinas Uji', 'pimpinan_nip' => '197001011995031002']);
     $reportId = $body['media']['id'] ?? null;
     if ($status !== 201 || ! $reportId) {
         $fail('generate PDF gagal', $body);
     }
     $reportMedia = Media::find($reportId);
     $full = storage_path('app/private/'.$reportMedia->path);
+    $pdfInfo = (string) shell_exec('pdfinfo '.escapeshellarg($full).' 2>/dev/null');
+    if (! preg_match('/Page size:\s+([\d.]+) x ([\d.]+)/', $pdfInfo, $size) || (float) $size[1] >= (float) $size[2]) {
+        $fail('orientasi portrait tidak diterapkan', ['pdfinfo' => $pdfInfo]);
+    }
     $xml = (string) shell_exec('pdftotext '.escapeshellarg($full).' - 2>/dev/null');
     $missing = array_values(array_filter(
         ['LAPORAN KINERJA BULANAN', 'Uji e-SAKIP revisi', 'Kegiatan Kalender Mandiri', 'Selesai diuji', $plan['name'], 'CATATAN', 'Mengetahui,', 'Pimpinan Uji', 'Kepala Dinas Uji', 'NIP. 197001011995031002', 'Penanggung Jawab,', 'NIP. 198001012005011001', 'Analis Uji', 'LAMPIRAN BERKAS', 'Kegiatan 1', 'bukti-check.png', 'bukti-check-2.jpg'],
@@ -250,7 +254,7 @@ try {
     if (! str_contains($links, 'https://contoh.test/api/media/')) {
         $fail('hyperlink lampiran tidak memakai base URL klien');
     }
-    $pages = (int) trim((string) shell_exec('pdfinfo '.escapeshellarg($full).' 2>/dev/null | awk \'/^Pages:/{print $2}\''));
+    $pages = preg_match('/^Pages:\s+(\d+)/m', $pdfInfo, $pageMatch) ? (int) $pageMatch[1] : 0;
     $lastPage = (string) shell_exec('pdftotext -f '.$pages.' -l '.$pages.' '.escapeshellarg($full).' - 2>/dev/null');
     if ($pages < 2 || (! str_contains($lastPage, 'LAMPIRAN BERKAS') && ! str_contains($lastPage, 'bukti-check')) || str_contains($lastPage, 'D. CATATAN')) {
         $fail('lampiran bukan halaman terakhir atau catatan masih di halaman lampiran', ['pages' => $pages, 'last' => substr($lastPage, 0, 300)]);
