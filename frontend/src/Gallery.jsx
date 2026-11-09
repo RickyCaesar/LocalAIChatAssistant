@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, mediaSrc } from './api.js';
 import { confirmAction } from './feedback.js';
+import Pager from './Pager.jsx';
 
 const fmtDate = (iso) =>
   iso
@@ -14,6 +15,9 @@ const fmtSize = (bytes) => {
 };
 
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+// shortcut: pagination hanya memotong data yang sudah dimuat; pindah ke pagination server-side jika muatan awal berat.
+const PAGE_SIZE = 12;
 
 const relDate = (iso) => {
   if (!iso) return '—';
@@ -83,6 +87,7 @@ export default function Gallery() {
   const [type, setType] = useState('all');
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('newest');
+  const [page, setPage] = useState(1);
   const [view, setView] = useState(() => localStorage.getItem('gallery-view') || 'grid');
   const [selected, setSelected] = useState(null);
   const [converting, setConverting] = useState(false);
@@ -161,6 +166,10 @@ export default function Gallery() {
       return sort === 'oldest' ? at - bt : bt - at;
     });
 
+  const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const current = Math.min(page, pages);
+  const paged = visible.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -175,7 +184,7 @@ export default function Gallery() {
             <button
               key={t.key}
               type="button"
-              onClick={() => setFilter(t.key)}
+              onClick={() => { setFilter(t.key); setPage(1); }}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                 filter === t.key
                   ? 'bg-white text-slate-900 shadow-sm dark:bg-brand-800 dark:text-white'
@@ -198,14 +207,14 @@ export default function Gallery() {
           </svg>
           <input
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => { setQ(e.target.value); setPage(1); }}
             placeholder="Cari nama file, percakapan, atau tanggal..."
             className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus:border-skyblue"
           />
         </div>
         <select
           value={type}
-          onChange={(e) => setType(e.target.value)}
+          onChange={(e) => { setType(e.target.value); setPage(1); }}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-brand-800"
         >
           {typeOptions.map((t) => (
@@ -214,7 +223,7 @@ export default function Gallery() {
         </select>
         <select
           value={sort}
-          onChange={(e) => setSort(e.target.value)}
+          onChange={(e) => { setSort(e.target.value); setPage(1); }}
           aria-label="Urutkan media"
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-brand-800"
         >
@@ -265,7 +274,7 @@ export default function Gallery() {
         </p>
       ) : view === 'grid' ? (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {visible.map((m) => (
+          {paged.map((m) => (
             <button
               key={m.id}
               type="button"
@@ -316,7 +325,7 @@ export default function Gallery() {
         </div>
       ) : (
         <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-brand-900 dark:ring-slate-700">
-          {visible.map((m) => (
+          {paged.map((m) => (
             <button
               key={m.id}
               type="button"
@@ -346,6 +355,8 @@ export default function Gallery() {
           ))}
         </div>
       )}
+
+      <Pager page={current} pages={pages} onChange={setPage} />
 
       {selected && (
         <div

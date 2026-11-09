@@ -11,17 +11,17 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
 - **Konversi video ke MP3** (menu **ConvertToAudio**): video (MP4/MKV/MOV/…) atau berkas audio lain → MP3. Memakai PyAV (venv STT yang sudah ada), jadi tak perlu `ffmpeg` sistem. Diproses **asinkron di antrean**.
-- **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pencarian** nama berkas/percakapan/tanggal, **urutan tanggal** terbaru/terlama, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
+- **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pagination sisi klien**, **pencarian** nama berkas/percakapan/tanggal, **urutan tanggal** terbaru/terlama, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
 - **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper`; unggah via tombol atau **drag & drop**. Diproses **asinkron di antrean** (container `queue-worker`).
 - **Suara AI (Text-to-Speech)** lokal memakai **Piper** (CPU): tombol **Bacakan** di tiap balasan AI, plus **Mode Suara** dua arah (bicara → transkripsi → jawaban dibacakan otomatis → mikrofon siap lagi) — lihat *Mode Suara*.
 - **Antrean proses**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, posisi dalam antrean, dan **jam selesai (WITA)**. Tombol antrean di header (kiri lonceng notifikasi) menampilkan jumlah proses aktif dan membuka halaman Antrean; progres tetap berjalan saat berpindah menu.
 - **Notifikasi**: lonceng di header dengan lencana belum dibaca, toast di kanan atas saat tugas antrean selesai/gagal, dan **notifikasi browser (OS)** opsional saat tab tidak aktif. Tersimpan per akun dan bisa ditandai dibaca.
 - **Dashboard admin**: tren request & token untuk **7/30/90/365 hari**, total per rentang, label sumbu adaptif, dan tooltip per hari berisi jumlah request + token. Token chat streaming diambil dari `usage` gateway.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — misalnya tabel jadwal atau daftar kegiatan — lalu mengirimnya ke chat/Gallery.
-- **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen dengan struktur rapat umum (kop, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan) — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery.
+- **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen dinas resmi dengan **kop terkunci** (logo dan teks lima baris tidak dipengaruhi LLM), identitas borderless 2 kolom, pembukaan, pembahasan materi utama bersub-poin, diskusi, kesimpulan, tindak lanjut 2 kolom, penutup, tanda tangan rata kanan, dan dokumentasi — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery.
 - **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
-- **Todo**: prioritas, catatan, tenggat + jam, durasi, tindak lanjut, bukti dari Gallery, dan indikator kinerja yang dapat dikelola per pengguna. Daftar bisa difilter per tanggal dan diurutkan berdasarkan tenggat terdekat/terjauh. Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
+- **Todo**: prioritas, catatan, tenggat + jam, durasi, tindak lanjut, bukti dari Gallery, dan indikator kinerja yang dapat dikelola per pengguna. Daftar bisa difilter per tanggal dan diurutkan berdasarkan tenggat terdekat/terjauh, dengan **pagination sisi klien**. Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang, filter per indikator, status selesai, serta edit tindak lanjut/bukti langsung dari acara tertaut. Bisa juga dikendalikan dari chat.
 - **Laporan Kinerja Bulanan**: matriks kegiatan/jam/bukti per indikator, total bulanan, indikator yang dikelola per pengguna, template kegiatan bulanan, lalu **generate PDF** berisi ringkasan, matriks, rincian, catatan, tanda tangan, dan lampiran. NIP dan jabatan pengguna diambil dari profil; saat generate dapat diisi nama, jabatan, dan NIP pimpinan untuk blok **"Mengetahui,"** di samping tanda tangan Penanggung Jawab. Orientasi PDF dapat dipilih **Portrait** atau **Landscape**.
 - **Pengaturan**: timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau) yang **berlaku untuk semua pengguna**. Model AI tidak diatur di sini: aplikasi selalu memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes.
@@ -215,30 +215,31 @@ Skema JSON `DOC_BUILD` (dijelaskan ke model lewat `ActionRunner::toolsInstructio
 
 Tiap blok boleh punya `heading`, `columns` (baris header tebal), dan `rows`; `columns`/`rows` juga boleh di level atas (dianggap satu blok). Berkas disimpan ke penyimpanan media dan otomatis muncul di **Gallery**.
 
-Skema JSON `NOTULEN_BUILD` (struktur notulen rapat umum — kop, judul, identitas, ringkasan, agenda, pokok pembahasan, tanya-jawab, keputusan, action items, penutup, tanda tangan):
+Skema JSON `NOTULEN_BUILD` (struktur notulen dinas resmi — identitas, agenda, pembukaan, pembahasan materi utama bersub-poin, diskusi, kesimpulan, tindak lanjut, penutup, tanda tangan, dokumentasi):
 
 ```json
 {
   "filename": "Notulen_Rapat.docx",
   "judul": "NOTULENSI RAPAT",
   "subjudul": "Rapat Koordinasi Bulanan",
-  "identitas": {"Hari/Tanggal": "Senin, 4 Januari 2027", "Tempat": "Ruang Rapat",
-                "Moderator": "Moderator", "Peserta": "Peserta rapat"},
-  "ringkasan": ["Rapat membahas agenda kegiatan bulanan."],
+  "identitas": {"Hari/Tanggal": "Senin, 4 Januari 2027", "Waktu": "09.00 WITA",
+                "Tempat": "Ruang Rapat", "Pimpinan Rapat": "Pimpinan", "Peserta": "Peserta rapat",
+                "Agenda": "Koordinasi bulanan"},
+  "ringkasan": [],
   "agenda": ["Pembukaan dan kehadiran peserta"],
-  "pembahasan": [{"judul": "A. Pokok Bahasan",
-                   "paragraf": ["Penjelasan singkat mengenai pokok bahasan."],
+  "pembahasan": [{"judul": "Pembukaan dan pengantar rapat",
+                   "paragraf": ["Penjelasan singkat mengenai pembukaan."],
                    "poin": ["Poin pertama", "Poin kedua"]}],
   "tanya_jawab": ["Tidak ada pertanyaan dan jawaban tercatat dalam rekaman."],
   "keputusan": ["Keputusan rapat dicatat pada bagian ini."],
   "action_items": [["Penanggung Jawab", "Tindakan"], ["Peserta", "Menindaklanjuti hasil rapat."]],
   "penutup": ["Demikian notulensi ini disusun berdasarkan rekaman rapat."],
-  "penanda_tangan": [["Pimpinan Kegiatan", "Pimpinan"], ["Notulen", "Notulis"]],
+  "penanda_tangan": [["Pimpinan Rapat", "Pimpinan"], ["Notulis", "Notulis"]],
   "catatan": ["Sumber: rekaman rapat."]
 }
 ```
 
-Semua kunci opsional: yang tidak diisi dilewati, dan kop instansi dipakai otomatis kalau `kepala` tidak diberikan. Penulis DOCX (`App\Support\NotulenBuilder`) memakai `ZipArchive` seperti `DocumentBuilder` — tanpa gambar, header/footer, dan penomoran halaman (kalau perlu, ganti ke `phpoffice/phpword`).
+Kop surat (logo dan lima baris instansi) **sengaja tidak menjadi bagian dari skema JSON**: nilainya ditetapkan oleh aplikasi dari konstanta `NotulenBuilder::KOP`, lalu diberi garis ganda sebelum judul dan disiapkan pada halaman pertama. Ini mencegah model mengubah kapitalisasi, alamat, kontak, situs, atau email berdasarkan transkrip. Semua kunci isi bersifat opsional; yang kosong atau dinyatakan tidak diketahui ditampilkan sebagai `-`, bukan kalimat panjang, di tabel identitas dan tanda tangan. Penulis DOCX (`App\Support\NotulenBuilder`) memakai `ZipArchive` seperti `DocumentBuilder` — tanpa header/footer Word, daftar isi, dan penomoran halaman berbasis Word number field (kalau perlu, ganti ke `phpoffice/phpword` atau template `.docx` master).
 
 ## Notifikasi
 
@@ -301,6 +302,7 @@ backend/            Laravel API
 frontend/           React + Vite + Tailwind
   src/App.jsx                 shell, navigasi sidebar, chat, polling antrean global
   src/*.jsx                   Gallery, Todo, Calendar, PerformanceReport, Transcribe, Convert, Presentasi, Notulensi, Queue, Skills, Settings, Users, Dashboard, Profile (akun), Notifications (lonceng + toast)
+  src/Pager.jsx               komponen pagination sisi klien untuk Gallery dan Todo
   src/holidays.js             helper hari libur Indonesia (date-holidays)
   src/time.js                 helper format jam & tanggal WITA (chat dan riwayat antrean)
   src/theme.css               override utilitas Tailwind agar memakai variabel tema (diimpor setelah index.css)
@@ -335,6 +337,7 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - `php artisan serve` berjalan dengan `PHP_CLI_SERVER_WORKERS=4` (fork bawaan PHP), jadi satu request berat yang belum dipindah ke antrean tidak membekukan healthcheck/API — sisanya menunggu worker kosong. Cukup untuk pemakaian lokal. Laravel hanya mengaktifkan ini dengan flag `--no-reload` (lihat `Dockerfile`); konsekuensinya, mengubah `backend/.env` butuh restart container, bukan auto-reload.
 - Server dan `queue-worker` berbagi **satu file SQLite** yang di-mount sebagai file tunggal; karena itu mode jurnal dipaksa `delete` (bukan WAL) + `busy_timeout` 5s agar tidak "database is locked". Untuk konkurensi lebih berat, pindahkan DB ke direktori bersama (agar WAL bisa dipakai) atau ke Postgres.
 - `DocumentBuilder` menghasilkan XLSX minimal (tabel/daftar berjudul, header tebal) tanpa rumus/grafik/pivot, dan hanya mendukung `.xlsx`.
+- **NotulenBuilder** adalah satu-satunya penulis DOCX notulen dari `NOTULEN_BUILD`. Ia tidak memakai template `.docx` master atau `phpoffice/phpword`; layout, logo, dan kop terkunci langsung disusun sebagai XML dengan `ZipArchive`. Ekstraksi angka dari transkrip sangat panjang masih bergantung pada model, bukan parsing deterministik di backend; hasil yang dianggap tidak lengkap tetap harus diperiksa sebelum dipakai resmi.
 - Pembuatan PPTX memakai **marp-cli + Chromium** (Chromium sudah ada untuk konversi). Tema presentasi adalah **6 set tetap**; menambah tema = entri di `Presentasi.jsx` + variabel CSS Marp.
 - **Urutan CSS penting**: `theme.css` harus diimpor **setelah** `index.css` (setelah Tailwind) agar variabel tema menang atas utilitas Tailwind yang ber-hex statis. Dijaga oleh `main.jsx`; lihat komentar di kedua berkas.
 - STT memakai `faster-whisper` (ffmpeg dibundel lewat PyAV), jadi `ffmpeg`/`whisper.cpp` tak diperlukan; base image backend adalah **Debian** (`php:8.2-cli`), bukan Alpine.

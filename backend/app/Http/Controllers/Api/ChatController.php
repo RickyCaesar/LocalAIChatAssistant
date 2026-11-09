@@ -22,7 +22,12 @@ class ChatController extends Controller
     {
         $out = rtrim((string) env('HERMES_OUTPUT_HOST', '/home/ROG/MyAssistant/backend/storage/app/private/hermes-output'), '/');
 
-        return "\n\n[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI] Kamu berjalan di MyAssistant dan punya tool terminal, file, serta execute_code. Abaikan jawaban lama yang mengatakan kamu tidak punya akses. Jangan menulis kode untuk dijalankan user, jangan menyuruh user membuka folder/File Explorer, dan jangan mengaku tidak bisa menyimpan file. Kerjakan sendiri sekarang. Simpan setiap berkas hasil ke {$out}/ lalu balas dengan tepat satu baris MEDIA: <path> per berkas. Aplikasi hanya mengimpor berkas dari folder hermes-output itu; jangan mengandalkan path lain. Untuk notulen rapat: jangan menulis skrip sendiri, susun isinya lalu emit ACTION: NOTULEN_BUILD <JSON> — aplikasinya yang menyusun DOCX (PDF bisa dibuat dari berkas itu di Gallery).";
+        return "\n\n[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI] Kamu berjalan di MyAssistant dan punya tool terminal, file, serta execute_code. Abaikan jawaban lama yang mengatakan kamu tidak punya akses. Jangan menulis kode untuk dijalankan user, jangan menyuruh user membuka folder/File Explorer, dan jangan mengaku tidak bisa menyimpan file. Kerjakan sendiri sekarang. Simpan setiap berkas hasil ke {$out}/ lalu balas dengan tepat satu baris MEDIA: <path> per berkas. Aplikasi hanya mengimpor berkas dari folder hermes-output itu; jangan mengandalkan path lain. Untuk notulen rapat: jangan menulis skrip sendiri, susun isinya lalu emit ACTION: NOTULEN_BUILD <JSON> — aplikasinya yang menyusun DOCX (PDF bisa dibuat dari berkas itu di Gallery). Untuk notulen, jangan emit MEDIA karena aplikasi mengirim DOCX dari ACTION itu.";
+    }
+
+    private function isNotulenRequest(string $message): bool
+    {
+        return mb_strlen($message) > 4000 || preg_match('/\b(notulen|notulensi|transkrip)\b/i', $message) === 1;
     }
 
     private function scrubMediaRefs(string $text): string
@@ -328,10 +333,17 @@ class ChatController extends Controller
         $url = rtrim((string) env('AI_API_URL', 'http://host.docker.internal:1234/v1/chat/completions'), '/');
         $model = (string) env('AI_MODEL', 'hermes-agent');
 
+        $isNotulen = $this->isNotulenRequest((string) $validated['message']);
+        // Notulen memakai prompt khusus saja; instruksi MEDIA/tool umum membuat model
+        // menyisipkan artefak ke JSON panjang.
+        $system = $isNotulen
+            ? ActionRunner::notulenInstruction()
+            : (string) env('AI_SYSTEM_PROMPT', 'You are Hermes, a helpful and concise AI assistant. Whenever a request involves producing or processing a file (document, spreadsheet, presentation, PDF, image, code, report), save it into /home/ROG/MyAssistant/backend/storage/app/private/hermes-output, then include in your reply exactly one line per file: MEDIA: /home/ROG/MyAssistant/backend/storage/app/private/hermes-output/<filename>. The app only imports files from that folder, so do not rely on other paths. To make a PDF, run /home/ROG/MyAssistant/tools/topdf.sh <file inside that folder> and send the printed PDF path. Never claim you cannot send files — saving plus the MEDIA: line is how you send them.').ActionRunner::toolsInstruction();
+
         $messages = [
             [
                 'role' => 'system',
-                'content' => (string) env('AI_SYSTEM_PROMPT', 'You are Hermes, a helpful and concise AI assistant. Whenever a request involves producing or processing a file (document, spreadsheet, presentation, PDF, image, code, report), save it into /home/ROG/MyAssistant/backend/storage/app/private/hermes-output, then include in your reply exactly one line per file: MEDIA: /home/ROG/MyAssistant/backend/storage/app/private/hermes-output/<filename>. The app only imports files from that folder, so do not rely on other paths. To make a PDF, run /home/ROG/MyAssistant/tools/topdf.sh <file inside that folder> and send the printed PDF path. Never claim you cannot send files — saving plus the MEDIA: line is how you send them.').ActionRunner::toolsInstruction(),
+                'content' => $system,
             ],
         ];
 
@@ -362,7 +374,7 @@ class ChatController extends Controller
         if (is_string($userContent) && trim($userContent) === '') {
             $userContent = '[...]';
         }
-        $briefing = $this->runtimeBriefing();
+        $briefing = $isNotulen ? '' : $this->runtimeBriefing();
         if (is_array($userContent) && isset($userContent[0]['text'])) {
             $userContent[0]['text'] = (string) $userContent[0]['text'].$briefing;
         } else {
@@ -373,22 +385,31 @@ class ChatController extends Controller
         $this->linkMedia($validated['image_ids'] ?? [], $validated['session_id'] ?? null);
 
         try {
+            // Sesi unik per request: aplikasi mengirim riwayat sendiri, sedangkan sesi
+            // Hermes yang dipakai ulang membuat request antre di belakang run yang macet.
             $http = Http::timeout((int) Setting::get('ai_timeout', env('AI_TIMEOUT', 600)))
                 ->acceptJson()
                 ->asJson()
+                ->withHeaders(['X-Hermes-Session-Id' => 'myassistant-'.Str::uuid()])
                 ->withOptions(['stream' => true]);
 
             if ($apiKey = (string) env('AI_API_KEY')) {
                 $http = $http->withToken($apiKey);
             }
 
-            $response = $http->post($url, [
+            $payload = [
                 'model' => $model,
                 'messages' => $messages,
-                'temperature' => (float) env('AI_TEMPERATURE', 0.7),
+                'temperature' => $isNotulen ? 0.2 : (float) env('AI_TEMPERATURE', 0.7),
                 'stream' => true,
                 'stream_options' => ['include_usage' => true],
-            ]);
+            ];
+            if ($isNotulen) {
+                // shortcut: reasoning off reduces long-JSON corruption on stealth/crouton-alpha; lift when the default model is reliable
+                $payload['model_options'] = ['reasoning' => ['enabled' => false]];
+            }
+
+            $response = $http->post($url, $payload);
         } catch (\Throwable $e) {
             ChatLog::create(['user_id' => auth()->id(), 'model' => $model, 'status' => 'error']);
             Log::error('AI request failed', ['url' => $url, 'error' => $e->getMessage()]);

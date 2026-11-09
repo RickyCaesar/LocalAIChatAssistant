@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, mediaSrc } from './api.js';
 import { confirmAction } from './feedback.js';
+import Pager from './Pager.jsx';
+
+// shortcut: pagination hanya memotong data yang sudah dimuat; pindah ke pagination server-side jika muatan awal berat.
+const PAGE_SIZE = 10;
 
 const PRIORITIES = [
   { value: 'tinggi', label: 'Tinggi' },
@@ -126,6 +130,7 @@ export default function TodoList() {
   const [filter, setFilter] = useState('semua');
   const [day, setDay] = useState('');
   const [sort, setSort] = useState('nearest');
+  const [page, setPage] = useState(1);
   const [editing, setEditing] = useState(null);
   const [options, setOptions] = useState({ plans: [], media: [] });
   const [loading, setLoading] = useState(true);
@@ -236,6 +241,10 @@ export default function TodoList() {
       if (bt === null) return -1;
       return sort === 'farthest' ? bt - at : at - bt;
     });
+
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const current = Math.min(page, pages);
+  const paged = shown.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
   const tabs = [
     { key: 'semua', label: `Semua (${todos.length})` },
@@ -410,7 +419,7 @@ export default function TodoList() {
             <button
               key={t.key}
               type="button"
-              onClick={() => setFilter(t.key)}
+              onClick={() => { setFilter(t.key); setPage(1); }}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                 filter === t.key ? 'bg-white shadow-sm dark:bg-brand-600' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
               }`}
@@ -423,14 +432,14 @@ export default function TodoList() {
           <input
             type="date"
             value={day}
-            onChange={(e) => setDay(e.target.value)}
+            onChange={(e) => { setDay(e.target.value); setPage(1); }}
             aria-label="Cari tanggal kegiatan"
             title="Cari berdasarkan tanggal kegiatan"
             className={input}
           />
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value)}
+            onChange={(e) => { setSort(e.target.value); setPage(1); }}
             aria-label="Urutkan todo"
             className={input}
           >
@@ -449,7 +458,7 @@ export default function TodoList() {
         </p>
       ) : (
         <ul className="mt-4 space-y-2">
-          {shown.map((todo) =>
+          {paged.map((todo) =>
             editing && editing.id === todo.id ? (
               <li key={todo.id} className="rounded-2xl bg-white p-3 shadow-sm ring-2 ring-brand dark:bg-brand-900 dark:ring-skyblue">
                 <form onSubmit={saveEdit} className="space-y-2">
@@ -564,6 +573,8 @@ export default function TodoList() {
           )}
         </ul>
       )}
+
+      <Pager page={current} pages={pages} onChange={setPage} />
     </div>
   );
 }

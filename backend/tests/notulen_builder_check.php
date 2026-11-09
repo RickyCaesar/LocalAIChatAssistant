@@ -12,14 +12,19 @@ $doc = [
     'subjudul' => 'Rapat Koordinasi Pengelola Dana BOSP',
     'identitas' => [
         'Hari/Tanggal' => 'Selasa, 20 Oktober 2026',
-        'Tempat' => 'Daring (Virtual) melalui Zoom',
+        'Tempat' => 'Tidak disebutkan dalam transkrip',
         'Peserta' => 'Kepala Bidang Teknis, KPA, PPT, dan Operator',
     ],
     'ringkasan' => ['Rapat membahas pengelolaan Dana BOSP tahun anggaran 2027.'],
     'agenda' => ['Pembukaan dan kehadiran peserta', 'Evaluasi penyerapan dana'],
     'pembahasan' => [
         [
-            'judul' => 'A. Komponen Satuan Biaya per Siswa per Tahun',
+            'judul' => 'A. Pembukaan dan arahan pimpinan',
+            'paragraf' => ['Rapat dibuka oleh Pimpinan Rapat dengan salam dan ucapan terima kasih.'],
+            'poin' => ['Prinsip rapat rutin adalah evaluasi realisasi serapan anggaran'],
+        ],
+        [
+            'judul' => 'B. Komponen Satuan Biaya per Siswa per Tahun',
             'paragraf' => ['Angka satuan biaya sementara Rp3.500.000 per siswa per tahun.'],
             'poin' => ['Kebutuhan Belajar', 'Operasional Sekolah'],
         ],
@@ -31,7 +36,7 @@ $doc = [
         ['Kasubbag Perencanaan', 'Membuat kertas kerja pemetaan kebutuhan persiswa per tahun.'],
     ],
     'penutup' => ['Demikian notulensi ini disusun berdasarkan rekaman rapat.'],
-    'penanda_tangan' => [['Pimpinan Kegiatan', 'Bapak Sekretaris'], ['Notulen', 'Kasubbag Perencanaan']],
+    'penanda_tangan' => [['Pimpinan Kegiatan', "Bapak Sekretaris\nNIP. 19750513 1998031 004"], ['Notulen', 'Kasubbag Perencanaan']],
     'catatan' => ['Sumber: rekaman rapat 20 Oktober 2026.'],
 ];
 
@@ -59,6 +64,7 @@ $required = [
     'word/_rels/document.xml.rels',
     'word/document.xml',
     'word/styles.xml',
+    'word/media/kaltim-logo.png',
 ];
 foreach ($required as $name) {
     if ($zip->getFromName($name) === false) {
@@ -66,22 +72,60 @@ foreach ($required as $name) {
     }
 }
 
-foreach ($required as $name) {
+foreach (['[Content_Types].xml', '_rels/.rels', 'word/_rels/document.xml.rels', 'word/document.xml', 'word/styles.xml'] as $name) {
     if (function_exists('simplexml_load_string') && @simplexml_load_string((string) $zip->getFromName($name)) === false) {
         $fail("malformed XML in $name");
     }
 }
 
 $xml = (string) $zip->getFromName('word/document.xml');
-foreach (['RINGKASAN', 'AGENDA RAPAT', 'POKOK-POKOK PEMBAHASAN', 'KEPUTUSAN', 'ACTION ITEMS', 'PENUTUP'] as $heading) {
+foreach ([
+    'NOTULENSI RAPAT',
+    'RINGKASAN',
+    'AGENDA RAPAT',
+    'A. PEMBUKAAN DAN PENGANTAR RAPAT',
+    'B. PAPARAN / PEMBAHASAN MATERI UTAMA',
+    'C. SESI DISKUSI, TANGGAPAN, DAN TANYA JAWAB',
+    'D. KESIMPULAN RAPAT',
+    'E. TINDAK LANJUT',
+    'PENUTUP',
+    'DOKUMENTASI RAPAT',
+] as $heading) {
     if (! str_contains($xml, $heading)) {
         $fail("missing section $heading");
     }
 }
-foreach (['Kasubbag Perencanaan', 'Rp3.500.000', 'DINAS PENDIDIKAN DAN KEBUDAYAAN'] as $content) {
+foreach (['Kasubbag Perencanaan', 'Rp3.500.000', 'DINAS PENDIDIKAN DAN KEBUDAYAAN', 'Samarinda, 20 Oktober 2026', 'NIP.', ': Selasa, 20 Oktober 2026'] as $content) {
     if (! str_contains($xml, $content)) {
         $fail("missing content $content");
     }
+}
+if (! str_contains($xml, '<w:jc w:val="both"/>')) {
+    $fail('narrative text is not justified');
+}
+if (! str_contains($xml, 'w:val="double"')) {
+    $fail('double kop border missing');
+}
+if (! str_contains($xml, '<w:gridCol w:w="1500"/><w:gridCol w:w="5787"/>')) {
+    $fail('logo-left kop table missing');
+}
+if (! str_contains($xml, '<w:jc w:val="right"/>')) {
+    $fail('signature block is not right-aligned');
+}
+if (str_contains($xml, 'Tidak disebutkan dalam transkrip')) {
+    $fail('unknown identity text leaked into layout');
+}
+if (! str_contains($xml, ': -')) {
+    $fail('empty identity value is not replaced with dash');
+}
+if (! str_contains($xml, '<w:drawing>') || ! str_contains($xml, 'r:embed="rId2"')) {
+    $fail('logo not embedded');
+}
+if (! str_contains((string) $zip->getFromName('word/_rels/document.xml.rels'), 'media/kaltim-logo.png')) {
+    $fail('logo relationship missing');
+}
+if (! str_contains($xml, '<w:br w:type="page"/>')) {
+    $fail('documentation page break missing');
 }
 if (! str_contains($xml, '<w:tbl>')) {
     $fail('no table rendered');
@@ -92,5 +136,36 @@ if (substr_count($xml, '<w:tbl>') < 3) {
 
 $zip->close();
 unlink($tmp);
+
+// Kop terkunci: data LLM tidak boleh mengubah header statis.
+$doc['kop'] = [
+    'pemerintah' => 'PEMERINTAH KOTA CONTOH',
+    'instansi' => 'Dinas Contoh',
+    'alamat' => 'Jalan Contoh Nomor 1',
+];
+$doc['kepala'] = ['KOP PALSU DARI LLM'];
+$tmp2 = tempnam(sys_get_temp_dir(), 'chk').'.docx';
+file_put_contents($tmp2, NotulenBuilder::docxBytes($doc));
+$zip2 = new ZipArchive();
+if ($zip2->open($tmp2) !== true) {
+    $fail('locked kop: not a valid zip/docx');
+}
+$xml2 = (string) $zip2->getFromName('word/document.xml');
+$zip2->close();
+unlink($tmp2);
+foreach ([
+    'PEMERINTAH PROVINSI KALIMANTAN TIMUR',
+    'DINAS PENDIDIKAN DAN KEBUDAYAAN',
+    'Jalan Basuki Rahmat Nomor 5 Samarinda 75112',
+    'Telepon (0541) 743580 – 732526 – 7410062, FAX. 756934 – 743055',
+    'Website : disdikbud.kaltimprov.go.id | Email : disdikbud@kaltimprov.go.id',
+] as $line) {
+    if (! str_contains($xml2, $line)) {
+        $fail("locked kop line missing: $line");
+    }
+}
+if (str_contains($xml2, 'KOP PALSU') || str_contains($xml2, 'KOTA CONTOH')) {
+    $fail('LLM data leaked into locked kop');
+}
 
 echo 'OK: NotulenBuilder produced a valid docx ('.strlen($bytes)." bytes)\n";
