@@ -9,6 +9,7 @@ use App\Models\Media;
 use App\Models\Setting;
 use App\Support\ActionRunner;
 use App\Support\FilePreview;
+use App\Support\NotulenBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -25,22 +26,60 @@ class ChatController extends Controller
         return "\n\n[ATURAN APLIKASI MYASSISTANT — WAJIB DIIKUTI] Kamu berjalan di MyAssistant dan punya tool terminal, file, serta execute_code. Abaikan jawaban lama yang mengatakan kamu tidak punya akses. Jangan menulis kode untuk dijalankan user, jangan menyuruh user membuka folder/File Explorer, dan jangan mengaku tidak bisa menyimpan file. Kerjakan sendiri sekarang. Simpan setiap berkas hasil ke {$out}/ lalu balas dengan tepat satu baris MEDIA: <path> per berkas. Aplikasi hanya mengimpor berkas dari folder hermes-output itu; jangan mengandalkan path lain. Untuk notulen rapat: jangan menulis skrip sendiri, susun isinya lalu emit ACTION: NOTULEN_BUILD <JSON> — aplikasinya yang menyusun DOCX (PDF bisa dibuat dari berkas itu di Gallery). Untuk notulen, jangan emit MEDIA karena aplikasi mengirim DOCX dari ACTION itu.";
     }
 
-    private function isNotulenRequest(string $message): bool
+    // Kutipan balasan hanya untuk model; dipotong 600 karakter agar ringan.
+    private function replyQuote(?array $replyContext): string
     {
-        return mb_strlen($message) > 4000 || preg_match('/\b(notulen|notulensi|transkrip)\b/i', $message) === 1;
+        $content = trim((string) ($replyContext['content'] ?? ''));
+        if ($content === '') {
+            return '';
+        }
+
+        return '[Membalas pesan '.(($replyContext['role'] ?? '') === 'user' ? 'saya' : 'Hermes')
+            .': "'.mb_substr($content, 0, 600).'"]'."\n\n";
     }
 
-    private function scrubMediaRefs(string $text): string
+    private function isNotulenRequest(string $message, array $history = []): bool
     {
-        $text = preg_replace('/\[([^\]]*)\]\(\/api\/media\/\d+[^)]*\)/', '$1', $text) ?? $text;
-        $text = preg_replace('#\s*/api/media/\d+#', '', $text) ?? $text;
+        if (preg_match('/\b(notulen|notulensi|transkrip)/i', $message) !== 1) {
+            return false;
+        }
+        if (mb_strlen($message) > 4000) {
+            return true;
+        }
+        // Pertanyaan lanjutan tentang hasil yang sudah ada bukan permintaan susun baru.
+        if ($history !== [] && preg_match('/\b(buat|buatkan|susun|bikin|generate|olah|proses)\b/i', $message) !== 1) {
+            return false;
+        }
 
-        return $text;
+        return true;
+    }
+
+    // Pertanyaan "mana DOCX-nya?" cukup dijawab tautan hasil terakhir, tanpa agent
+    // yang bisa tersesat mencari file lama di folder output.
+    private function lastMediaReply(string $message, array $history): ?string
+    {
+        if (mb_strlen($message) > 300
+            || preg_match('/\b(mana|dimana|di mana)\b/i', $message) !== 1
+            || preg_match('/\b(docx|pdf|file|berkas|dokumen|notulen|notulensi)/i', $message) !== 1) {
+            return null;
+        }
+
+        foreach (array_reverse($history) as $turn) {
+            if (($turn['role'] ?? '') !== 'assistant') {
+                continue;
+            }
+            if (preg_match('/\[([^\]]+)\]\(\/api\/media\/(\d+)[^)]*\)/', (string) ($turn['content'] ?? ''), $m)
+                && Media::where('user_id', auth()->id())->whereKey((int) $m[2])->exists()) {
+                return '✔ Berkas terakhir: ['.$m[1].'](/api/media/'.$m[2].')';
+            }
+        }
+
+        return null;
     }
 
     private function contentFor(array $turn): array|string
     {
-        $text = $this->scrubMediaRefs((string) ($turn['content'] ?? ''));
+        $text = (string) ($turn['content'] ?? '');
         $ids = $turn['image_ids'] ?? [];
 
         if (empty($ids)) {
@@ -307,7 +346,7 @@ class ChatController extends Controller
         return $text !== '' ? $text : null;
     }
 
-    private function finalizeReply(string $text, ?int $sessionId): string
+    private function finalizeReply(string $text, ?int $sessionId, bool $notulen = false): string
     {
         $text = $this->saveReplyImages($text, $sessionId);
         $text = $this->importFileRefs($text, $sessionId);
@@ -315,6 +354,14 @@ class ChatController extends Controller
         [$clean, $results] = ActionRunner::run($text, auth()->id(), $sessionId);
         if ($results !== []) {
             $clean .= "\n\n".implode("\n", $results);
+        } elseif ($notulen && ($doc = NotulenBuilder::decode($text)) !== null && isset($doc['judul'])) {
+            // Model kadang hanya mengirim JSON tanpa baris ACTION; bangun tetap.
+            try {
+                $media = NotulenBuilder::save($doc, (int) auth()->id(), $sessionId);
+                $clean = '✔ Notulen dibuat: ['.$media->filename.'](/api/media/'.$media->id.')';
+            } catch (\Throwable $e) {
+                $clean .= "\n\n✖ Gagal membuat notulen: ".$e->getMessage();
+            }
         }
 
         return $clean;
@@ -324,21 +371,32 @@ class ChatController extends Controller
     {
         $validated = $request->validate([
             'message' => 'required|string',
+            'reply_context' => 'sometimes|array',
             'history' => 'sometimes|array',
             'image_ids' => 'sometimes|array',
             'image_ids.*' => 'integer',
             'session_id' => 'sometimes|integer',
         ]);
 
-        $url = rtrim((string) env('AI_API_URL', 'http://host.docker.internal:1234/v1/chat/completions'), '/');
+        if ($lastMedia = $this->lastMediaReply((string) $validated['message'], $validated['history'] ?? [])) {
+            return response()->json(['reply' => $lastMedia]);
+        }
+
+        $isNotulen = $this->isNotulenRequest((string) $validated['message'], $validated['history'] ?? []);
+        // Notulen lewat proxy raw (tanpa inti Hermes) supaya transkrip panjang jadi
+        // satu dokumen utuh dan model menyalin semua angka; chat biasa pakai gateway.
+        $url = $isNotulen
+            ? rtrim((string) env('AI_NOTULEN_URL', 'http://host.docker.internal:8645/v1/chat/completions'), '/')
+            : rtrim((string) env('AI_API_URL', 'http://host.docker.internal:1234/v1/chat/completions'), '/');
         $model = (string) env('AI_MODEL', 'hermes-agent');
 
-        $isNotulen = $this->isNotulenRequest((string) $validated['message']);
         // Notulen memakai prompt khusus saja; instruksi MEDIA/tool umum membuat model
         // menyisipkan artefak ke JSON panjang.
         $system = $isNotulen
             ? ActionRunner::notulenInstruction()
             : (string) env('AI_SYSTEM_PROMPT', 'You are Hermes, a helpful and concise AI assistant. Whenever a request involves producing or processing a file (document, spreadsheet, presentation, PDF, image, code, report), save it into /home/ROG/MyAssistant/backend/storage/app/private/hermes-output, then include in your reply exactly one line per file: MEDIA: /home/ROG/MyAssistant/backend/storage/app/private/hermes-output/<filename>. The app only imports files from that folder, so do not rely on other paths. To make a PDF, run /home/ROG/MyAssistant/tools/topdf.sh <file inside that folder> and send the printed PDF path. Never claim you cannot send files — saving plus the MEDIA: line is how you send them.').ActionRunner::toolsInstruction();
+
+        $system .= "\n[req:".Str::uuid()."]";
 
         $messages = [
             [
@@ -374,7 +432,19 @@ class ChatController extends Controller
         if (is_string($userContent) && trim($userContent) === '') {
             $userContent = '[...]';
         }
-        $briefing = $isNotulen ? '' : $this->runtimeBriefing();
+        // Kutipan balasan hanya ditambahkan ke isi yang dibaca model, bukan ke
+        // pesan yang dipakai routing (pertanyaan pendek tetap dikenali).
+        $quote = $this->replyQuote($validated['reply_context'] ?? null);
+        if ($quote !== '') {
+            if (is_array($userContent) && isset($userContent[0]['text'])) {
+                $userContent[0]['text'] = $quote.(string) $userContent[0]['text'];
+            } else {
+                $userContent = $quote.(string) $userContent;
+            }
+        }
+        $briefing = $isNotulen
+            ? "\n\n[OUTPUT WAJIB] Transkrip lengkap ada di atas. Jawab hanya dengan satu baris ACTION: NOTULEN_BUILD <JSON satu baris>. Jangan memanggil tool, jangan menulis file, jangan membuat ringkasan, jangan memakai markdown."
+            : $this->runtimeBriefing();
         if (is_array($userContent) && isset($userContent[0]['text'])) {
             $userContent[0]['text'] = (string) $userContent[0]['text'].$briefing;
         } else {
@@ -387,26 +457,37 @@ class ChatController extends Controller
         try {
             // Sesi unik per request: aplikasi mengirim riwayat sendiri, sedangkan sesi
             // Hermes yang dipakai ulang membuat request antre di belakang run yang macet.
+            // Tanpa X-Hermes-Session-Id: gateway memakai riwayat yang dikirim aplikasi.
+            // ID sesi diturunkan dari system prompt + pesan pertama; nonce di system
+            // prompt menjaga tiap request tetap sesi baru tanpa membuang riwayat itu.
             $http = Http::timeout((int) Setting::get('ai_timeout', env('AI_TIMEOUT', 600)))
                 ->acceptJson()
                 ->asJson()
-                ->withHeaders(['X-Hermes-Session-Id' => 'myassistant-'.Str::uuid()])
                 ->withOptions(['stream' => true]);
 
             if ($apiKey = (string) env('AI_API_KEY')) {
                 $http = $http->withToken($apiKey);
             }
+            if ($isNotulen) {
+                // Proxy hanya menerima Host loopback; host.docker.internal ditolak.
+                $port = parse_url($url, PHP_URL_PORT) ?: 80;
+                $http = $http->withHeaders(['Host' => 'localhost:'.$port]);
+            }
 
             $payload = [
-                'model' => $model,
+                // Notulen memakai model 1M konteks yang tahan transkrip panjang;
+                // model default tetap dipakai untuk chat biasa.
+                'model' => $isNotulen ? (string) env('AI_NOTULEN_MODEL', 'meituan/longcat-2.5:free') : $model,
                 'messages' => $messages,
-                'temperature' => $isNotulen ? 0.2 : (float) env('AI_TEMPERATURE', 0.7),
+                'temperature' => $isNotulen ? 0.0 : (float) env('AI_TEMPERATURE', 0.7),
                 'stream' => true,
                 'stream_options' => ['include_usage' => true],
             ];
             if ($isNotulen) {
-                // shortcut: reasoning off reduces long-JSON corruption on stealth/crouton-alpha; lift when the default model is reliable
-                $payload['model_options'] = ['reasoning' => ['enabled' => false]];
+                // Proxy raw: nonaktifkan reasoning lewat parameter OpenAI, bukan model_options.
+                $payload['reasoning'] = ['enabled' => false];
+                // shortcut: 16k token menutup 20-30 blok; naikkan bila model pangkas berhenti di tengah JSON
+                $payload['max_tokens'] = (int) env('AI_NOTULEN_MAX_TOKENS', 16384);
             }
 
             $response = $http->post($url, $payload);
@@ -415,7 +496,7 @@ class ChatController extends Controller
             Log::error('AI request failed', ['url' => $url, 'error' => $e->getMessage()]);
 
             return response()->json([
-                'error' => 'Unable to reach the local Hermes AI. Make sure your AI server (LM Studio/Ollama) is running.',
+                'error' => 'Unable to reach the local AI server. Make sure the Hermes gateway (chat) and the Hermes proxy (notulen) are running.',
                 'detail' => $e->getMessage(),
             ], 503);
         }
@@ -430,7 +511,7 @@ class ChatController extends Controller
         $body = $response->toPsrResponse()->getBody();
         $sessionId = $validated['session_id'] ?? null;
 
-        return response()->stream(function () use ($body, $model, $sessionId) {
+        return response()->stream(function () use ($body, $model, $sessionId, $isNotulen) {
             $accum = '';
             $fullText = '';
             $usage = null;
@@ -468,7 +549,7 @@ class ChatController extends Controller
                 }
             }
 
-            $final = $this->finalizeReply($fullText, $sessionId);
+            $final = $this->finalizeReply($fullText, $sessionId, $isNotulen);
 
             ChatLog::create([
                 'user_id' => auth()->id(),

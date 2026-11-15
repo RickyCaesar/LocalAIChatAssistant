@@ -6,7 +6,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 ## Fitur
 
-- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** di bubble, dan **pemisah tanggal** (Hari ini/Kemarin/tanggal lengkap) muncul sebelum pesan pertama tiap hari. Sesi bisa diganti namanya langsung dari sidebar (ikon pensil) dan tetap tampil di sidebar compact.
+- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** di bubble, dan **pemisah tanggal** (Hari ini/Kemarin/tanggal lengkap) muncul sebelum pesan pertama tiap hari. Sesi bisa diganti namanya langsung dari sidebar (ikon pensil) dan tetap tampil di sidebar compact. Riwayat dirender bertahap (30 pesan) dan pesan lama dimuat manual lewat tombol **Muat chat lama**; tiap pesan (pengguna maupun Hermes) bisa dibalas dengan **Balas**, dan kutipannya ikut dikirim ke model sebagai konteks.
 - **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), menyusun presentasi (PPTX) bertema, serta mengirim berkas hasil olahan. Hermes selalu diberi **waktu sekarang (WITA) + tanggal hari ini & besok**, jadi permintaan seperti "jadwalkan besok jam 9" menghasilkan tanggal yang tepat.
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
@@ -18,7 +18,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Notifikasi**: lonceng di header dengan lencana belum dibaca, toast di kanan atas saat tugas antrean selesai/gagal, dan **notifikasi browser (OS)** opsional saat tab tidak aktif. Tersimpan per akun dan bisa ditandai dibaca.
 - **Dashboard admin**: tren request & token untuk **7/30/90/365 hari**, total per rentang, label sumbu adaptif, dan tooltip per hari berisi jumlah request + token. Token chat streaming diambil dari `usage` gateway.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — misalnya tabel jadwal atau daftar kegiatan — lalu mengirimnya ke chat/Gallery.
-- **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen dinas resmi dengan **kop terkunci** (logo dan teks lima baris tidak dipengaruhi LLM), identitas borderless 2 kolom, pembukaan, pembahasan materi utama bersub-poin, diskusi, kesimpulan, tindak lanjut 2 kolom, penutup, tanda tangan rata kanan, dan dokumentasi — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery.
+- **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen dinas resmi dengan **kop terkunci** (logo dan teks lima baris tidak dipengaruhi LLM), identitas borderless 2 kolom, pembukaan, pembahasan materi utama bersub-poin, diskusi, kesimpulan, tindak lanjut 2 kolom, penutup, tanda tangan rata kanan, dan dokumentasi — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery. Transkrip panjang dikirim utuh sebagai satu pesan ke model notulen lewat proxy mentah (lihat *Notulen: proxy mentah*), bukan lewat gateway agent.
 - **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
 - **Todo**: prioritas, catatan, tenggat + jam, durasi, tindak lanjut, bukti dari Gallery, dan indikator kinerja yang dapat dikelola per pengguna. Daftar bisa difilter per tanggal dan diurutkan berdasarkan tenggat terdekat/terjauh, dengan **pagination sisi klien**. Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
@@ -128,6 +128,9 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 | `APP_TIMEZONE` | `Asia/Makassar` | zona waktu aplikasi (WITA, UTC+8); stempel waktu & konteks tanggal Hermes mengikuti ini |
 | `AI_API_KEY` | `change-me-local-dev` | kunci gateway |
 | `AI_MODEL` | `hermes-agent` | alias gateway; model asli (dan-feat-fit gratis) dipilih di Hermes, bukan di aplikasi |
+| `AI_NOTULEN_URL` | `http://host.docker.internal:8645/v1/chat/completions` | endpoint proxy mentah Hermes khusus notulen (`hermes proxy start --provider nous`) |
+| `AI_NOTULEN_MODEL` | `meituan/longcat-2.5:free` | model notulen berkonteks 1M; chat biasa tetap memakai `AI_MODEL` |
+| `AI_NOTULEN_MAX_TOKENS` | `16384` | batas token keluaran JSON notulen |
 | `AI_TIMEOUT` | `600` | timeout request AI (detik); dapat ditimpa dari Settings dan admin bebas menentukan batasnya |
 | `AI_TEMPERATURE` | `0.7` | suhu sampling |
 | `AI_SYSTEM_PROMPT` | — | instruksi sistem (termasuk cara mengirim berkas via baris `MEDIA:`) |
@@ -153,6 +156,15 @@ HERMES_HOME=/home/ROG/.hermes hermes gateway
 ```
 
 Gateway yang dipakai aplikasi: `POST /v1/chat/completions` (chat, model selalu alias `hermes-agent`) dan `GET /health` (status). Container me-mount `backend/storage/app` (baca-tulis, termasuk folder output `HERMES_OUTPUT_HOST`), `backend/.env`, SQLite, dan `~/.hermes` (read-only); agent tidak lagi mendapat seluruh home directory. Sumber lokal yang ingin diolah harus diunggah lewat aplikasi atau disalin ke folder output.
+
+### Notulen: proxy mentah (tanpa inti agent)
+
+Permintaan notulen tidak lewat gateway `:8642`, melainkan **proxy mentah** Hermes di `:8645` (`ChatController` memakai `AI_NOTULEN_URL`). Alasannya: gateway memotong setiap content part di **65.536 karakter** dan menjalankan loop agent, sedangkan transkrip rapat sering 90.000+ karakter; proxy hanya meneruskan body `chat/completions` apa adanya sehingga seluruh transkrip sampai ke model sebagai satu pesan dan angka di bagian awal tidak hilang.
+
+- Jalankan di host: `hermes proxy start --provider nous` (default `127.0.0.1:8645`).
+- Proxy hanya menerima Host loopback, jadi backend mengirim header `Host: localhost:<port>`.
+- Suhu `0`, reasoning dimatikan, dan batas keluaran diatur lewat `AI_NOTULEN_MAX_TOKENS`; modelnya `AI_NOTULEN_MODEL`.
+- Kalau proxy mati, notulen dibalas **503**; chat biasa lewat gateway `:8642` tetap jalan. Fair-share 429 berlaku juga dan tidak ada fallback otomatis untuk notulen.
 
 ### Model gratis & rate limit
 
@@ -293,6 +305,7 @@ backend/            Laravel API
   stt/toaudio.py              ekstrak audio → MP3 via PyAV (memancarkan progres)
   tests/document_builder_check.php  self-check penulis XLSX (php, tanpa framework)
   tests/notulen_builder_check.php  self-check penulis DOCX notulen (php, tanpa framework)
+  tests/chat_routing_check.php self-check routing notulen vs lanjutan, tautan media terakhir & kutipan balasan (php, butuh DB)
   tests/eta_check.php         self-check rumus ETA (php, tanpa framework)
   tests/analytics_check.php   self-check rentang grafik analitik 7/30/90/365 hari (php, butuh DB)
   tests/profile_check.php     self-check endpoint profil + proteksi settings (php, butuh DB)
@@ -337,7 +350,10 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - `php artisan serve` berjalan dengan `PHP_CLI_SERVER_WORKERS=4` (fork bawaan PHP), jadi satu request berat yang belum dipindah ke antrean tidak membekukan healthcheck/API — sisanya menunggu worker kosong. Cukup untuk pemakaian lokal. Laravel hanya mengaktifkan ini dengan flag `--no-reload` (lihat `Dockerfile`); konsekuensinya, mengubah `backend/.env` butuh restart container, bukan auto-reload.
 - Server dan `queue-worker` berbagi **satu file SQLite** yang di-mount sebagai file tunggal; karena itu mode jurnal dipaksa `delete` (bukan WAL) + `busy_timeout` 5s agar tidak "database is locked". Untuk konkurensi lebih berat, pindahkan DB ke direktori bersama (agar WAL bisa dipakai) atau ke Postgres.
 - `DocumentBuilder` menghasilkan XLSX minimal (tabel/daftar berjudul, header tebal) tanpa rumus/grafik/pivot, dan hanya mendukung `.xlsx`.
-- **NotulenBuilder** adalah satu-satunya penulis DOCX notulen dari `NOTULEN_BUILD`. Ia tidak memakai template `.docx` master atau `phpoffice/phpword`; layout, logo, dan kop terkunci langsung disusun sebagai XML dengan `ZipArchive`. Ekstraksi angka dari transkrip sangat panjang masih bergantung pada model, bukan parsing deterministik di backend; hasil yang dianggap tidak lengkap tetap harus diperiksa sebelum dipakai resmi.
+- **NotulenBuilder** adalah satu-satunya penulis DOCX notulen dari `NOTULEN_BUILD`. Ia tidak memakai template `.docx` master atau `phpoffice/phpword`; layout, logo, dan kop terkunci langsung disusun sebagai XML dengan `ZipArchive`. Ekstraksi angka dari transkrip sangat panjang masih bergantung pada model, bukan parsing deterministik di backend; hasil yang dianggap tidak lengkap tetap harus diperiksa sebelum dipakai resmi. `decode()` memperbaiki JSON cacat (array tak tertutup, koma menggantung, escape tidak sah, kurung tutup tertukar), tetapi tidak menjamin semua angka terbawa.
+- Notulen bergantung pada `hermes proxy start --provider nous` yang dijalankan **manual** di host; setelah reboot proxy tidak hidup sendiri, jadi jalankan ulang. Tanpa proxy, notulen dibalas 503.
+- Chat hanya **merender** 30 pesan terakhir; pesan lama dimuat manual. Seluruh riwayat tetap dikirim ke model tiap request, jadi sesi sangat panjang masih memperbesar prompt dan memperlambat jawaban — belum ada pemotongan riwayat di server.
+- Kutipan balasan dipotong **600 karakter** sebelum dikirim ke model, jadi balasan atas pesan yang sangat panjang hanya membawa bagian awalnya.
 - Pembuatan PPTX memakai **marp-cli + Chromium** (Chromium sudah ada untuk konversi). Tema presentasi adalah **6 set tetap**; menambah tema = entri di `Presentasi.jsx` + variabel CSS Marp.
 - **Urutan CSS penting**: `theme.css` harus diimpor **setelah** `index.css` (setelah Tailwind) agar variabel tema menang atas utilitas Tailwind yang ber-hex statis. Dijaga oleh `main.jsx`; lihat komentar di kedua berkas.
 - STT memakai `faster-whisper` (ffmpeg dibundel lewat PyAV), jadi `ffmpeg`/`whisper.cpp` tak diperlukan; base image backend adalah **Debian** (`php:8.2-cli`), bukan Alpine.

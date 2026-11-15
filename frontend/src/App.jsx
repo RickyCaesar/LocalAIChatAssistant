@@ -25,6 +25,14 @@ import { NotificationBell, ToastContainer, browserNotify, chime } from './Notifi
 import { fmtWita, fmtWitaDate } from './time.js';
 
 const mediaSrcFor = mediaSrc;
+// Riwayat panjang dirender bertahap seperti WhatsApp; pesan lama tetap di state.
+const CHAT_PAGE = 30;
+
+// Kutipan balasan dipakai di bubble dan di teks yang dikirim ke model.
+const quoteSnippet = (text, max = 600) => {
+  const s = String(text ?? '').replace(/\s+/g, ' ').trim();
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+};
 
 function CodeBlock({ language, code }) {
   const [copied, setCopied] = useState(false);
@@ -205,7 +213,7 @@ function PendingBadge({ item, onRemove }) {
   );
 }
 
-function MessageBubble({ message, speaking, onSpeak }) {
+function MessageBubble({ message, speaking, onSpeak, onReply }) {
   const isUser = message.role === 'user';
 
   if (isUser) {
@@ -243,11 +251,34 @@ function MessageBubble({ message, speaking, onSpeak }) {
               })}
             </div>
           )}
+          {message.reply && (
+            <div className="mb-1.5 rounded-lg border-l-2 border-white/60 bg-white/10 px-2 py-1 text-xs">
+              <span className="block font-semibold text-white/90">
+                {message.reply.role === 'user' ? 'Pesan Anda' : 'Hermes'}
+              </span>
+              <span className="line-clamp-2 whitespace-pre-wrap break-words text-white/70">
+                {quoteSnippet(message.reply.content, 200)}
+              </span>
+            </div>
+          )}
           {message.content && (
             <p className="whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed">{message.content}</p>
           )}
-          {message.at && (
-            <p className="mt-1 text-right text-[0.7rem] leading-none text-white/70">{fmtWita(message.at)}</p>
+          {(message.at || onReply) && (
+            <div className="mt-1 flex items-center justify-between gap-3 text-[0.7rem] leading-none text-white/70">
+              {onReply ? (
+                <button
+                  type="button"
+                  onClick={onReply}
+                  className="rounded px-1 py-0.5 font-medium transition hover:bg-white/15 hover:text-white"
+                >
+                  Balas
+                </button>
+              ) : (
+                <span />
+              )}
+              {message.at && <span>{fmtWita(message.at)}</span>}
+            </div>
           )}
         </div>
       </div>
@@ -267,19 +298,32 @@ function MessageBubble({ message, speaking, onSpeak }) {
             {message.content}
           </ReactMarkdown>
         </div>
-        {!message.error && onSpeak && String(message.content).trim() && (
-          <button
-            type="button"
-            onClick={onSpeak}
-            aria-label={speaking ? 'Hentikan suara' : 'Bacakan pesan'}
-            title={speaking ? 'Hentikan suara' : 'Bacakan pesan'}
-            className={`mt-1.5 flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium transition hover:bg-cream dark:hover:bg-brand-800 ${
-              speaking ? 'text-brand dark:text-skyblue' : 'text-slate-400 dark:text-slate-500'
-            }`}
-          >
-            {speaking ? <StopSoundIcon /> : <SpeakerIcon />}
-            {speaking ? 'Hentikan' : 'Bacakan'}
-          </button>
+        {!message.error && ((onSpeak && String(message.content).trim()) || onReply) && (
+          <div className="mt-1.5 flex items-center gap-1">
+            {onSpeak && String(message.content).trim() && (
+              <button
+                type="button"
+                onClick={onSpeak}
+                aria-label={speaking ? 'Hentikan suara' : 'Bacakan pesan'}
+                title={speaking ? 'Hentikan suara' : 'Bacakan pesan'}
+                className={`flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-medium transition hover:bg-cream dark:hover:bg-brand-800 ${
+                  speaking ? 'text-brand dark:text-skyblue' : 'text-slate-400 dark:text-slate-500'
+                }`}
+              >
+                {speaking ? <StopSoundIcon /> : <SpeakerIcon />}
+                {speaking ? 'Hentikan' : 'Bacakan'}
+              </button>
+            )}
+            {onReply && (
+              <button
+                type="button"
+                onClick={onReply}
+                className="rounded-lg px-1.5 py-1 text-xs font-medium text-slate-400 transition hover:bg-cream dark:text-slate-500 dark:hover:bg-brand-800"
+              >
+                Balas
+              </button>
+            )}
+          </div>
         )}
         {message.at && (
           <p className="mt-1 text-right text-[0.7rem] leading-none text-slate-400 dark:text-slate-500">{fmtWita(message.at)}</p>
@@ -770,6 +814,20 @@ export default function App() {
   const fileInputRef = useRef(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(CHAT_PAGE);
+  // Pesan yang sedang dibalas (salinan, bukan index, agar aman saat riwayat dipotong).
+  const [replyTo, setReplyTo] = useState(null);
+
+  // Muat pesan lama; posisi baca dipertahankan agar layar tidak melompat.
+  const loadOlder = () => {
+    if (visibleCount >= messages.length) return;
+    const el = chatMainRef.current;
+    const fromBottom = el ? el.scrollHeight - el.scrollTop : 0;
+    setVisibleCount((n) => n + CHAT_PAGE);
+    requestAnimationFrame(() => {
+      if (el) el.scrollTop = el.scrollHeight - fromBottom;
+    });
+  };
 
   const handleChatScroll = () => {
     const el = chatMainRef.current;
@@ -949,6 +1007,12 @@ export default function App() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [page, activeId]);
 
+  // Ganti sesi = mulai lagi dari halaman terakhir.
+  useEffect(() => {
+    setVisibleCount(CHAT_PAGE);
+    setReplyTo(null);
+  }, [activeId]);
+
   useEffect(() => {
     if (!loading) return;
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
@@ -1088,7 +1152,17 @@ export default function App() {
         ...(m.image_ids && m.image_ids.length ? { image_ids: m.image_ids } : {}),
       }));
 
-    appendToActive((prev) => [...prev, { role: 'user', content: text, image_ids: imageIds, at: new Date().toISOString() }]);
+    appendToActive((prev) => [
+      ...prev,
+      {
+        role: 'user',
+        content: text,
+        ...(replyTo ? { reply: replyTo } : {}),
+        image_ids: imageIds,
+        at: new Date().toISOString(),
+      },
+    ]);
+    setReplyTo(null);
     setInput('');
     setPendingImages([]);
     setUploadError(null);
@@ -1099,7 +1173,7 @@ export default function App() {
 
     try {
       const reply = await streamChat(
-        { message: text, history, image_ids: imageIds, session_id: active.id },
+        { message: text, reply_context: replyTo || undefined, history, image_ids: imageIds, session_id: active.id },
         (chunk) => {
           setProgress('writing');
           setStreamText(chunk);
@@ -1621,19 +1695,37 @@ export default function App() {
                     </p>
                   </div>
                 )}
-                {messages.map((message, i) => {
+                {messages.length > visibleCount && (
+                  <button
+                    type="button"
+                    onClick={loadOlder}
+                    className="mx-auto rounded-full bg-cream px-3.5 py-1.5 text-[11px] font-medium text-slate-500 shadow-sm transition hover:bg-slate-100 dark:bg-brand-800 dark:text-slate-400 dark:hover:bg-brand-700"
+                  >
+                    Muat chat lama
+                  </button>
+                )}
+                {messages.slice(-visibleCount).map((message, i) => {
+                  const idx = messages.length - Math.min(visibleCount, messages.length) + i;
                   const date = fmtWitaDate(message.at);
                   return (
-                    <Fragment key={i}>
-                      {date && date !== fmtWitaDate(messages[i - 1]?.at) && (
+                    <Fragment key={idx}>
+                      {date && date !== fmtWitaDate(messages[idx - 1]?.at) && (
                         <div role="separator" className="w-fit self-center rounded-full bg-cream px-3 py-1 text-[11px] font-medium text-slate-500 shadow-sm dark:bg-brand-800 dark:text-slate-400">
                           {date}
                         </div>
                       )}
                       <MessageBubble
                         message={message}
-                        speaking={speaking === i}
-                        onSpeak={message.role === 'assistant' && !message.error ? () => speakAt(i, message.content) : null}
+                        speaking={speaking === idx}
+                        onSpeak={message.role === 'assistant' && !message.error ? () => speakAt(idx, message.content) : null}
+                        onReply={
+                          message.error
+                            ? null
+                            : () => {
+                                setReplyTo({ role: message.role, content: quoteSnippet(message.content) });
+                                textareaRef.current?.focus();
+                              }
+                        }
                       />
                     </Fragment>
                   );
@@ -1699,6 +1791,24 @@ export default function App() {
                   {pendingImages.map((img) => (
                     <PendingBadge key={img.id} item={img} onRemove={removePendingImage} />
                   ))}
+                </div>
+              )}
+              {replyTo && (
+                <div className="mx-auto mb-2 flex max-w-3xl items-start gap-2 rounded-xl border-l-4 border-brand bg-cream px-3 py-2 text-xs dark:border-skyblue dark:bg-brand-800">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-brand dark:text-skyblue">
+                      Membalas {replyTo.role === 'user' ? 'pesan Anda' : 'Hermes'}
+                    </p>
+                    <p className="truncate text-slate-500 dark:text-slate-400">{quoteSnippet(replyTo.content, 200)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo(null)}
+                    aria-label="Batalkan balasan"
+                    className="shrink-0 rounded px-1 text-base leading-none text-slate-400 transition hover:text-slate-700 dark:hover:text-slate-200"
+                  >
+                    ×
+                  </button>
                 </div>
               )}
               {voiceMode && (

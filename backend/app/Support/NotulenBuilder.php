@@ -28,6 +28,100 @@ class NotulenBuilder
         'Website : disdikbud.kaltimprov.go.id | Email : disdikbud@kaltimprov.go.id',
     ];
 
+    // Model kadang lupa menutup array di tengah atau memotong JSON di akhir.
+    // Perbaiki yang bisa ditebak (tutup array sebelum key object berikutnya,
+    // tutup kurung yang kurang, buang koma menggantung), lalu decode ulang.
+    public static function decode(string $arg): ?array
+    {
+        $doc = json_decode($arg, true);
+        if (is_array($doc)) {
+            return $doc;
+        }
+
+        $start = strpos($arg, '{');
+        if ($start === false) {
+            return null;
+        }
+
+        $json = substr($arg, $start);
+        // Model kadang menulis escape tidak sah: \NIP (maksudnya baris baru)
+        // atau \' . Perbaiki hanya setelah decode normal gagal.
+        $json = preg_replace('/\\\\N(?=IP\.)/', '\n', $json) ?? $json;
+        $json = preg_replace('/\\\\(?!["\\\\\/bfnrtu])/', '', $json) ?? $json;
+        $end = strrpos($json, '}');
+        if ($end !== false) {
+            $doc = json_decode(substr($json, 0, $end + 1), true);
+            if (is_array($doc)) {
+                return $doc;
+            }
+        }
+        $stack = [];
+        $out = '';
+        $inString = false;
+        $escaped = false;
+        $keyAt = null;
+        for ($i = 0, $n = strlen($json); $i < $n; $i++) {
+            $ch = $json[$i];
+            if ($inString) {
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($ch === '\\') {
+                    $escaped = true;
+                } elseif ($ch === '"') {
+                    $inString = false;
+                }
+            } elseif ($ch === '"') {
+                $inString = true;
+                $keyAt = strlen($out);
+            } elseif ($ch === '{' || $ch === '[') {
+                $stack[] = $ch;
+            } elseif ($ch === '}' || $ch === ']') {
+                // Tutup kontainer dalam yang tertukar: } saat top [ (atau sebaliknya)
+                // ditutup dulu dengan pasangannya, lalu tutup top yang cocok.
+                $closers = '';
+                while ($stack && (($ch === '}' && end($stack) === '[') || ($ch === ']' && end($stack) === '{'))) {
+                    $closers .= end($stack) === '[' ? ']' : '}';
+                    array_pop($stack);
+                }
+                $out .= $closers;
+                if (! $stack) {
+                    $ch = ''; // closer mengambang
+                } else {
+                    array_pop($stack);
+                }
+            } elseif ($ch === ':' && $stack && end($stack) === '[' && $keyAt !== null) {
+                // Key object muncul saat array masih terbuka: tutup array dulu.
+                $before = rtrim(substr($out, 0, $keyAt));
+                $comma = '';
+                if (str_ends_with($before, ',')) {
+                    $before = rtrim(substr($before, 0, -1));
+                    $comma = ',';
+                }
+                $closers = '';
+                while ($stack && end($stack) === '[') {
+                    array_pop($stack);
+                    $closers .= ']';
+                }
+                $out = $before.$closers.$comma.substr($out, $keyAt);
+            }
+            $out .= $ch;
+        }
+        if ($inString) {
+            $out .= '"';
+        }
+        $out = rtrim($out);
+        if (str_ends_with($out, ',')) {
+            $out = rtrim(substr($out, 0, -1));
+        }
+        while ($stack) {
+            $out .= array_pop($stack) === '{' ? '}' : ']';
+        }
+
+        $doc = json_decode($out, true);
+
+        return is_array($doc) ? $doc : null;
+    }
+
     public static function save(array $doc, int $userId, ?int $sessionId): Media
     {
         $bytes = self::docxBytes($doc);

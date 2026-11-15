@@ -168,4 +168,33 @@ if (str_contains($xml2, 'KOP PALSU') || str_contains($xml2, 'KOTA CONTOH')) {
     $fail('LLM data leaked into locked kop');
 }
 
+// JSON model cacat: array action_items tidak ditutup sebelum key "penutup".
+$broken = '{"filename":"Notulen.docx","action_items":[["Tim A","Kirim daftar"],["Tim B","Verifikasi"],"penutup":["Selesai"],"catatan":["x"]}';
+$repaired = NotulenBuilder::decode($broken);
+if (! is_array($repaired)
+    || count($repaired['action_items'] ?? []) !== 2
+    || ($repaired['penutup'][0] ?? null) !== 'Selesai'
+    || ($repaired['catatan'][0] ?? null) !== 'x') {
+    $fail('decode failed to repair missing array close');
+}
+$truncated = NotulenBuilder::decode('{"filename":"Notulen.docx","catatan":["terpotong"');
+if (($truncated['catatan'][0] ?? null) !== 'terpotong') {
+    $fail('decode failed to close truncated json');
+}
+if (NotulenBuilder::decode('bukan json') !== null) {
+    $fail('decode accepted garbage');
+}
+$wrapped = NotulenBuilder::decode('Berikut JSON-nya: {"filename":"N.docx","judul":"X"} semoga membantu');
+if (($wrapped['judul'] ?? null) !== 'X') {
+    $fail('decode failed to strip prose around json');
+}
+$escaped = NotulenBuilder::decode('{"filename":"N.docx","judul":"X","catatan":["Timur\NIP. 1","x\qy"]}');
+if (($escaped['catatan'][0] ?? null) !== "Timur\nIP. 1" || ($escaped['catatan'][1] ?? null) !== 'xqy') {
+    $fail('decode failed to repair invalid escapes');
+}
+$swapped = NotulenBuilder::decode('{"filename":"N.docx","identitas":{"Agenda":["a","b"},"ringkasan":[]}');
+if (($swapped['ringkasan'] ?? null) !== [] || ($swapped['identitas']['Agenda'] ?? null) !== ['a', 'b']) {
+    $fail('decode failed to repair swapped closing brackets');
+}
+
 echo 'OK: NotulenBuilder produced a valid docx ('.strlen($bytes)." bytes)\n";

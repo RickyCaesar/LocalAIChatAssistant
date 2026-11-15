@@ -116,10 +116,11 @@ class ActionRunner
             ."AGENDA: poin bernomor sesuai urutan rapat sampai penutup.\n"
             ."PEMBAHASAN: blok pertama = pembukaan/pengantar rapat; blok berikutnya = sub-topik materi utama sesuai agenda (aplikasi memberi penomoran B.1, B.2, dst). Setiap blok berisi \"judul\" tanpa huruf/penomoran, \"paragraf\" (kalimat lengkap), dan \"poin\" (butir penting). Jangan menggabungkan seluruh rapat ke satu blok dan jangan meringkas berlebihan.\n"
             ."ANGKA: salin setiap persen, pagu, target, dan realisasi persis dari transkrip (koma desimal). Jika rapat mengevaluasi capaian per unit/bidang, buat satu blok khusus dengan satu bullet per unit; jangan menukar realisasi dengan pagu dan jangan menulis 'tidak disebutkan' bila angka ada.\n"
+            ."PENTING: telusuri transkrip dari awal sampai akhir. Setiap angka (Rp, %, jumlah unit, tanggal, pagu, realisasi) yang disebut wajib muncul persis di pembahasan atau action_items. Jangan hanya mengambil bagian akhir transkrip. Jangan mengarang angka.\n"
             ."tanya_jawab: 'Pertanyaan: ... Jawaban: ...' untuk setiap masukan peserta ([] jika tidak ada). keputusan: poin keputusan yang disepakati. action_items: baris pertama tepat [\"Penanggung Jawab\",\"Tindakan\"], lalu satu baris per tindak lanjut.\n"
             ."penutup: kalimat penutup. penanda_tangan: [[\"Pimpinan Rapat\",\"Nama\\nNIP. ...\"],[\"Notulis\",\"Nama\\nNIP. ...\"]] sesuai peran di rapat. catatan: hal yang belum jelas/tidak disebut transkrip.\n"
             ."GAYA: Bahasa Indonesia formal dinas, kalimat lengkap, tanpa typo/ambigu. Nama, angka, persen, pagu, dan istilah hanya dari transkrip/absensi; tulis persis, jangan menukar realisasi dengan pagu. Tandai yang belum jelas di catatan.\n"
-            ."MINIMUM: agenda 3, keputusan 3, action_items 2 baris data, catatan 1; tanya_jawab 1 bila ada diskusi.\n"
+            ."MINIMUM: pembahasan 5 blok, agenda 3, keputusan 3, action_items 3 baris data, catatan 1; tanya_jawab 1 bila ada diskusi.\n"
             ."SKEMA JSON: {\"filename\":\"Notulen.docx\",\"judul\":\"NOTULENSI RAPAT\",\"subjudul\":\"...\",\"identitas\":{\"Hari/Tanggal\":\"...\",\"Waktu\":\"...\",\"Tempat\":\"...\",\"Pimpinan Rapat\":\"...\",\"Peserta\":\"...\",\"Agenda\":\"...\"},\"ringkasan\":[],\"agenda\":[\"...\"],\"pembahasan\":[{\"judul\":\"...\",\"paragraf\":[\"...\"],\"poin\":[\"...\"]}],\"tanya_jawab\":[\"Pertanyaan: ... Jawaban: ...\"],\"keputusan\":[\"...\"],\"action_items\":[[\"Penanggung Jawab\",\"Tindakan\"],[\"...\",\"...\"]],\"penutup\":[\"...\"],\"penanda_tangan\":[[\"Pimpinan Rapat\",\"Nama\\nNIP. ...\"],[\"Notulis\",\"Nama\\nNIP. ...\"]],\"catatan\":[\"...\"]}.\n"
             ."TELUSURI ULANG sebelum menjawab: pastikan setiap unit/bidang yang menyebut angka capaian punya bullet sendiri berisi angka persen/pagu persis, tanpa daftar yang diringkas.\n"
             ."FORMAT: balas TEPAT satu baris ACTION: NOTULEN_BUILD {JSON}; tanpa markdown/fence/penjelasan/draft/MEDIA/pengulangan. Pastikan JSON dapat di-parse: semua array/object tertutup, tanpa trailing comma, kutip ganda di dalam string di-escape, tanpa newline mentah. Periksa sekali lagi sebelum menjawab.";
@@ -399,8 +400,8 @@ class ActionRunner
 
     private static function notulenBuild(int $userId, string $arg, ?int $sessionId): string
     {
-        $doc = json_decode($arg, true);
-        if (! is_array($doc)) {
+        $doc = NotulenBuilder::decode($arg);
+        if ($doc === null) {
             return '✖ NOTULEN_BUILD butuh JSON valid dalam satu baris.';
         }
 
