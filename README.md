@@ -19,7 +19,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Dashboard admin**: tren request & token untuk **7/30/90/365 hari**, total per rentang, label sumbu adaptif, dan tooltip per hari berisi jumlah request + token. Token chat streaming diambil dari `usage` gateway.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — misalnya tabel jadwal atau daftar kegiatan — lalu mengirimnya ke chat/Gallery.
 - **Notulen rapat (DOCX) built-in**: `ACTION: NOTULEN_BUILD <JSON>` menyusun notulen dinas resmi dengan **kop terkunci** (logo dan teks lima baris tidak dipengaruhi LLM), identitas borderless 2 kolom, pembukaan, pembahasan materi utama bersub-poin, diskusi, kesimpulan, tindak lanjut 2 kolom, penutup, tanda tangan rata kanan, dan dokumentasi — **tanpa menulis skrip sendiri**; hasilnya masuk ke chat/Gallery. Transkrip panjang dikirim utuh sebagai satu pesan ke model notulen lewat proxy mentah (lihat *Notulen: proxy mentah*), bukan lewat gateway agent.
-- **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery.
+- **Presentasi (PPTX)**: buat deck dari deskripsi atau bahan referensi. AI menyusun draft **Marp Markdown** (bisa disunting dulu), lalu dirender jadi `.pptx` **asinkron di antrean** dengan **6 tema** (Violet/Sunset/Forest/Midnight/Rose/Slate); hasilnya masuk ke Gallery. Nama berkas otomatis diambil dari judul H1 deck (dirapikan, tanpa karakter terlarang); isi input bila ingin nama sendiri.
 - **Notulensi**: menyusun catatan rapat dari transkrip memakai AI, diproses **asinkron di antrean**.
 - **Todo**: prioritas, catatan, tenggat + jam, durasi, tindak lanjut, bukti dari Gallery, dan indikator kinerja yang dapat dikelola per pengguna. Daftar bisa difilter per tanggal dan diurutkan berdasarkan tenggat terdekat/terjauh, dengan **pagination sisi klien**. Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang, filter per indikator, status selesai, serta edit tindak lanjut/bukti langsung dari acara tertaut. Bisa juga dikendalikan dari chat.
@@ -129,7 +129,7 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 | `AI_API_KEY` | `change-me-local-dev` | kunci gateway |
 | `AI_MODEL` | `hermes-agent` | alias gateway; model asli (dan-feat-fit gratis) dipilih di Hermes, bukan di aplikasi |
 | `AI_NOTULEN_URL` | `http://host.docker.internal:8645/v1/chat/completions` | endpoint proxy mentah Hermes khusus notulen (`hermes proxy start --provider nous`) |
-| `AI_NOTULEN_MODEL` | `meituan/longcat-2.5:free` | model notulen berkonteks 1M; chat biasa tetap memakai `AI_MODEL` |
+| `AI_NOTULEN_MODEL` | sesuai `backend/.env` | model khusus notulen berkonteks besar; chat biasa tetap memakai `AI_MODEL` |
 | `AI_NOTULEN_MAX_TOKENS` | `16384` | batas token keluaran JSON notulen |
 | `AI_TIMEOUT` | `600` | timeout request AI (detik); dapat ditimpa dari Settings dan admin bebas menentukan batasnya |
 | `AI_TEMPERATURE` | `0.7` | suhu sampling |
@@ -168,31 +168,12 @@ Permintaan notulen tidak lewat gateway `:8642`, melainkan **proxy mentah** Herme
 
 ### Model gratis & rate limit
 
-Aplikasi **tidak pernah memilih model** — semua request memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes di `~/.hermes/config.yaml`. Setup gratis yang dipakai:
+Aplikasi **tidak pernah memilih model** — semua request memakai alias gateway `hermes-agent`, jadi pemilihan model, prioritas, dan fallback-nya sepenuhnya milik konfigurasi Hermes di `~/.hermes/config.yaml`. Nama model tidak ditulis di kode maupun UI.
 
-```yaml
-model:
-  default: stepfun/step-3.7-flash:free      # SKU :free
-  provider: nous
-fallback_providers:                          # cadangan, dipakai otomatis saat model utama kena limit
-  - provider: nous
-    model: poolside/laguna-s-2.1:free
-  - provider: nous
-    model: upstage/solar-mini4:free
-  - provider: nous
-    model: ornith/ornith-1.5-122b:free
-  - provider: nous
-    model: reflection/beam-1.0-501b-a23b:free
-auxiliary:
-  free_only: true                           # fallback auxiliary ke model berbayar DITOLAK
-  title_generation:
-    enabled: false                          # judul sesi = turunan kalimat user, tanpa panggilan API
-```
-
-- **429 (fair-share free Nous habis)**: Hermes otomatis pindah ke model free berikutnya dan tetap menjawab. Kalau semua fallback ikut kena limit, chat gagal dengan pesan *"Kuota model gratis sedang jenuh (rate limit)…"* (`ChatController::respondBuffered`, `AIController::presentationDraft`). Tidak ada jalur ke model berbayar selama `auxiliary.free_only: true` aktif.
-- `auxiliary.title_generation.enabled: false` mematikan panggilan judul AI yang sebelumnya ikut kena 429 — judul sesi tetap ada (turunan kalimat user, instan). Kalau mau judul AI lagi, arahkan ke satu SKU `:free` (mis. `poolside/laguna-s-2.1:free`).
+- **429 (fair-share gratis habis)**: Hermes otomatis pindah ke model cadangan dan tetap menjawab. Kalau semua cadangan ikut kena limit, chat gagal dengan pesan *"Kuota model gratis sedang jenuh (rate limit)…"* (`ChatController::respondBuffered`, `AIController::presentationDraft`). Tidak ada jalur ke model berbayar selama `auxiliary.free_only: true` aktif.
+- `auxiliary.free_only: true` menolak fallback berbayar; `auxiliary.title_generation.enabled: false` mematikan panggilan judul AI agar tidak ikut kena 429 — judul sesi tetap ada (turunan kalimat user, instan).
 - Cek konfigurasi aktif: `hermes config get fallback_providers`, `hermes config get auxiliary.title_generation.enabled`.
-- Daftar SKU `:free` yang tersedia berubah sewaktu-waktu; cek lewat `GET /v1/models` gateway (butuh bearer token).
+- Daftar model gratis yang tersedia berubah sewaktu-waktu; cek lewat `GET /v1/models` gateway (butuh bearer token).
 
 ### Aturan yang ditempel ke pesan user
 
@@ -253,6 +234,21 @@ Skema JSON `NOTULEN_BUILD` (struktur notulen dinas resmi — identitas, agenda, 
 
 Kop surat (logo dan lima baris instansi) **sengaja tidak menjadi bagian dari skema JSON**: nilainya ditetapkan oleh aplikasi dari konstanta `NotulenBuilder::KOP`, lalu diberi garis ganda sebelum judul dan disiapkan pada halaman pertama. Ini mencegah model mengubah kapitalisasi, alamat, kontak, situs, atau email berdasarkan transkrip. Semua kunci isi bersifat opsional; yang kosong atau dinyatakan tidak diketahui ditampilkan sebagai `-`, bukan kalimat panjang, di tabel identitas dan tanda tangan. Penulis DOCX (`App\Support\NotulenBuilder`) memakai `ZipArchive` seperti `DocumentBuilder` — tanpa header/footer Word, daftar isi, dan penomoran halaman berbasis Word number field (kalau perlu, ganti ke `phpoffice/phpword` atau template `.docx` master).
 
+### Design System Presentasi (Marp)
+
+Semua deck — draft AI maupun `ACTION: GENERATE_PPTX` — mengikuti satu standar; acuannya katalog grafik (bar, line, donut, map, scatter, bubble, gantt, tree map) dan tata letak executive dashboard. Kelas visualnya hidup di `backend/resources/marp/notebook.css`, bukan di Markdown: saat palet tema dipilih, `MarpGenerator` membuang `<style>`, blok `style: |`, dan directive `backgroundColor`/`color`, lalu menyuntik warna tema pilihan.
+
+- **Struktur**: pembuka `<!-- _class: lead -->` (`# Judul` + satu subjudul), pembatas bagian `<!-- _class: section -->` (`## Judul`), penutup/kutipan `<!-- _class: invert -->` berlatar gelap.
+- **Layout**: `.grid-2` / `.grid-3` untuk kolom, `.card` untuk tiap metrik/poin (border, radius, shadow), `.yellow-card` untuk satu kesimpulan kunci, `.gallery` + `<img>` untuk foto (`object-fit: cover`, tinggi tetap, `grayscale(20%)`).
+- **Angka & status**: `.badge` (kapital, tebal) untuk triwulan/status/kategori, `.stat-val` untuk angka besar, `.progress-track` berisi `.progress-fill` dengan `style="width:NN%"` untuk capaian atau serapan. Bar chart horizontal memakai `.chart-item` > `.chart-label` + `.progress-bar` > `.progress-fill` (label persentase ikut di dalam bar).
+- **Grafik**: SVG inline tanpa dependensi di dalam `.card` — `polyline` + `circle` (garis), `stroke-dasharray`/`stroke-dashoffset` (donut), `line` + `circle` (cluster peta/jaringan), `rect` (batang), grid/flex untuk tree map. Tanpa pustaka chart eksternal.
+- **Tabel**: HTML murni `<table>` + `<thead>`/`<tbody>` (bukan tabel pipa Markdown) — header berwarna aksen, zebra halus di baris genap, padding proporsional, sudut membulat.
+- **Foto**: `.gallery` + `<img>` Unsplash yang relevan; boleh juga `<img>` tunggal, gaya `object-fit: cover`.
+- **Warna & font**: palet berasal dari 6 tema UI (`--accent`, `--accent2`, `--bg`, `--ink`); jangan menulis `theme:`, `style:`, atau warna sendiri di Markdown — backend menyuntik `theme: notebook` bila tidak ada.
+- **Isi**: satu ide per slide, 3-6 butir pendek (maks ~8 kata), tanpa dinding teks. Draft AI membaca materi dulu, menyusun alur sendiri, dan tidak dibatasi jumlah slide. Draft AI mengikuti bahasa pengguna.
+
+Template awal di halaman **Presentasi** sudah memakai pola ini; tombol **Susun draf dengan AI** mengirim aturan di atas sebagai system prompt.
+
 ## Notifikasi
 
 Notifikasi dibuat otomatis saat tugas antrean selesai atau gagal (transkripsi, konversi MP3, notulensi, presentasi).
@@ -306,6 +302,7 @@ backend/            Laravel API
   tests/document_builder_check.php  self-check penulis XLSX (php, tanpa framework)
   tests/notulen_builder_check.php  self-check penulis DOCX notulen (php, tanpa framework)
   tests/chat_routing_check.php self-check routing notulen vs lanjutan, tautan media terakhir & kutipan balasan (php, butuh DB)
+  tests/marp_normalize_check.php self-check normalisasi Marp: palet menang atas style/backgroundColor, kelas contoh bertahan (php, tanpa framework)
   tests/eta_check.php         self-check rumus ETA (php, tanpa framework)
   tests/analytics_check.php   self-check rentang grafik analitik 7/30/90/365 hari (php, butuh DB)
   tests/profile_check.php     self-check endpoint profil + proteksi settings (php, butuh DB)

@@ -92,21 +92,32 @@ class AIController extends Controller
     public function presentationDraft(Request $request)
     {
         $data = $request->validate([
-            'prompt' => 'required|string|max:4000',
+            'prompt' => 'required|string',
             'material' => 'nullable|string|max:60000',
         ]);
 
         $model = (string) env('AI_MODEL', 'hermes-agent');
-        $system = 'You design modern, visually rich slide decks as Marp Markdown. '
+        $system = 'You design professional, corporate slide decks as Marp Markdown following the app design system. '
             .'Do NOT use tools and do NOT save files — reply with the Markdown text as your entire message, no explanations, no code fences. '
-            ."Begin with YAML frontmatter:\n---\nmarp: true\ntheme: notebook\npaginate: true\n---\n"
-            .'Separate every slide from the next with a line containing exactly three dashes (`---`). '
-            .'Formatting: first slide gets a `<!-- _class: title -->` line then a `# Title` and one subtitle line; use '
-            .'`<!-- _class: section -->` with a `## Heading` for part dividers in longer decks; every other slide has a `## heading` '
-            .'and 3-6 short bullets (max ~8 words each, no walls of text). Use tables, `**bold**`, and one `<blockquote>` only when they '
-            .'add clarity. Write in the same language as the user; use a few relevant emojis. For a distinctive look you MAY start the '
-            .'deck with `<style>:root{--accent:#4f46e5;--accent2:#06b6d4}</style>` (tasteful hex pair). '
-            .'If reference material is provided, base the content strictly on it and do not invent facts.';
+            ."Begin with YAML frontmatter:\n---\nmarp: true\npaginate: true\n---\n"
+            .'Never write `theme:`, `<style>`, a `style:` frontmatter block, `backgroundColor`, or `color` — the app injects the theme and palette. '
+            .'Separate every slide with a line containing exactly three dashes (`---`). '
+            .'Read the reference material thoroughly first, then decide the sections, slide order, and depth yourself; do not cap the number of slides. '
+            .'Use these classes: `.grid-2`/`.grid-3` for columns, `.card` for every metric or point block, `.yellow-card` for the one key conclusion, '
+            .'`.badge` for short labels (quarter, status, category), `.stat-val` for big numbers, `.progress-track` for KPI targets, '
+            .'and horizontal bar charts as `.chart-item` > `.chart-label` + `.progress-bar` > `.progress-fill` (inline width and label). '
+            .'For tabular data use pure HTML `<table>` with `<thead>`/`<tbody>` and short cells — never Markdown pipe tables. '
+            .'Use `.gallery` with relevant Unsplash `<img src="https://images.unsplash.com/...">` photos when they help. '
+            .'Charts must be dependency-free inline SVG inside a card: `<polyline>` + `<circle>` for line charts, circles with '
+            .'`stroke-dasharray`/`stroke-dashoffset` for donuts, `<line>` + `<circle>` for network/map clusters, `<rect>` for bars; '
+            .'include short text labels. '
+            .'First slide: `<!-- _class: lead -->`, then a specific `# Title` (max 8 words, no emoji, no trailing period) and one subtitle line. '
+            .'Part dividers: `<!-- _class: section -->` with `## Heading`. '
+            .'For decks with 4+ slides, slide 2 is an executive summary: a `.grid-3` of three `.card`s with `.badge` + `.stat-val` + one-line takeaway, plus `.yellow-card` for the key conclusion. '
+            .'Closing slide: `<!-- _class: invert -->` with a short quote or thank-you. '
+            .'Every other slide starts with `## heading`, then 3-6 short bullets (max ~8 words) or a grid/card/chart layout; no walls of text. '
+            .'Keep each slide inside the 16:9 canvas: max 6 cards, no nested grids, max 2 rows, and a table of max ~6 body rows. '
+            .'Write in the same language as the user. If reference material is provided, base the content strictly on it and do not invent facts.';
 
         $userContent = $data['prompt'];
         if (! empty($data['material'])) {

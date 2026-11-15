@@ -53,8 +53,13 @@ class MarpGenerator
             throw new ProcessFailedException($result);
         }
 
-        $filename = self::safeName($name).'.pptx';
+        // Nama berkas: pakai input user; kalau kosong, ambil judul H1 deck.
+        $name = trim((string) $name);
+        if ($name === '' && preg_match('/^#\s+(.+)$/m', $markdown, $h1)) {
+            $name = $h1[1];
+        }
 
+        $filename = self::safeName($name).'.pptx';
         return Media::create([
             'user_id' => $userId,
             'session_id' => $sessionId,
@@ -75,12 +80,20 @@ class MarpGenerator
         $vars = self::themeVars($theme);
 
         if ($vars !== '') {
-            // Buang <style> bawaan model agar tema pilihan pengguna menang.
+            // Tema pilihan pengguna menang: buang <style>, blok `style: |` di
+            // frontmatter, serta directive backgroundColor/color dari model atau
+            // contoh Marp, supaya palet 6 tema tidak tertimpa.
             $markdown = preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $markdown) ?? $markdown;
+            $markdown = preg_replace('/^style:\s*[|>].*?(?=^\S)/ms', '', $markdown) ?? $markdown;
+            $markdown = preg_replace('/^(backgroundColor|color):.*\n?/m', '', $markdown) ?? $markdown;
         }
 
         if (! str_starts_with($markdown, '---')) {
             $markdown = "---\nmarp: true\ntheme: notebook\npaginate: true\n---\n\n".$markdown;
+        }
+        // Model boleh tidak menulis `theme:`; tetap paksa notebook.
+        if (! preg_match('/^theme:/m', $markdown)) {
+            $markdown = preg_replace('/\A---\n/', "---\ntheme: notebook\n", $markdown, 1) ?? $markdown;
         }
         $markdown = preg_replace('/^(\s*)theme:.*$/m', '$1theme: notebook', $markdown, 1) ?? $markdown;
 
@@ -147,6 +160,7 @@ class MarpGenerator
     {
         $base = pathinfo(trim((string) $name), PATHINFO_FILENAME);
         $base = preg_replace('/[^A-Za-z0-9 _-]/', '', $base);
+        $base = trim(preg_replace('/\s+/', ' ', $base));
 
         return $base !== '' ? $base : 'presentasi-'.Str::lower(Str::random(6));
     }

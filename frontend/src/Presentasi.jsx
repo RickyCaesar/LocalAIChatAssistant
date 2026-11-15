@@ -24,7 +24,9 @@ theme: notebook
 paginate: true
 ---
 
-<!-- _class: title -->
+<!-- _class: lead -->
+
+<span class="badge">Ringkasan Eksekutif</span>
 
 # Judul Presentasi
 
@@ -32,7 +34,29 @@ Subjudul atau nama pembuat
 
 ---
 
-## Slide Kedua
+## Ringkasan Kinerja
+
+<span class="badge">Triwulan IV</span>
+
+<div class="grid-3">
+  <div class="card">
+    <p>Realisasi</p>
+    <div class="stat-val">92%</div>
+    <div class="progress-track"><div class="progress-fill" style="width:92%"></div></div>
+  </div>
+  <div class="card">
+    <p>Anggaran</p>
+    <div class="stat-val">Rp 4,8 M</div>
+  </div>
+  <div class="yellow-card">
+    <h3>Catatan utama</h3>
+    <p>Isi kesimpulan strategis di sini.</p>
+  </div>
+</div>
+
+---
+
+## Slide Berikutnya
 
 - Poin pertama
 - Poin kedua
@@ -40,12 +64,36 @@ Subjudul atau nama pembuat
 
 ---
 
-## Slide Ketiga
+<!-- _class: invert -->
 
-| Kolom A | Kolom B |
-| --- | --- |
-| isi 1 | isi 2 |
+# Terima Kasih
+
+### Sesi tanya jawab
 `;
+
+// Nama berkas dari judul H1 draf; cadangan: prompt tanpa kata perintah.
+// shortcut: H1 pertama saja, cukup untuk nama file — bukan analisis isi deck.
+const cleanName = (s) =>
+  s
+    .replace(/[*_`~#>]/g, '')
+    .replace(/[\\/:*?"<>|&]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\.+$/, '')
+    .slice(0, 80);
+
+const draftName = (markdown, prompt) => {
+  const title = cleanName(markdown.match(/^#\s+(.+)$/m)?.[1] || '');
+  if (title && !/^judul presentasi$/i.test(title)) return title;
+  const brief = prompt
+    .replace(
+      /^(?:(?:tolong|mohon|buatkan|buat|susunkan|susun|bikin|generate|create|make)\s+)+(?:(?:presentasi|slide|deck|paparan|ppt|pptx)\s+)?(?:tentang|mengenai|perihal|untuk)?\s*/i,
+      ''
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleanName(brief) || 'presentasi';
+};
 
 const fmtSize = (bytes) => {
   if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
@@ -131,10 +179,7 @@ export default function Presentasi() {
     try {
       const data = await apiDraftPresentation(prompt, materialText);
       setMarkdown(data.markdown);
-      if (!filename.trim()) {
-        const guess = prompt.trim().split(/\s+/).slice(0, 4).join(' ');
-        setFilename(guess);
-      }
+      if (!filename.trim()) setFilename(draftName(data.markdown, prompt));
     } catch (e) {
       setError(e.message);
     } finally {
