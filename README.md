@@ -6,7 +6,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 
 ## Fitur
 
-- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** di bubble, dan **pemisah tanggal** (Hari ini/Kemarin/tanggal lengkap) muncul sebelum pesan pertama tiap hari. Sesi bisa diganti namanya langsung dari sidebar (ikon pensil) dan tetap tampil di sidebar compact. Riwayat dirender bertahap (30 pesan) dan pesan lama dimuat manual lewat tombol **Muat chat lama**; tiap pesan (pengguna maupun Hermes) bisa dibalas dengan **Balas**, dan kutipannya ikut dikirim ke model sebagai konteks.
+- **Chat AI streaming** (SSE) dengan penyimpanan percakapan di server per akun; posisi selalu di pesan terbaru saat dibuka. Tiap pesan punya **cap waktu (WITA)** di bubble, dan **pemisah tanggal** (Hari ini/Kemarin/tanggal lengkap) muncul sebelum pesan pertama tiap hari. Sesi bisa diganti namanya langsung dari sidebar (ikon pensil) dan tetap tampil di sidebar compact. Riwayat dirender bertahap (30 pesan) dan pesan lama dimuat manual lewat tombol **Muat chat lama**; tiap pesan (pengguna maupun Hermes) bisa dibalas dengan **Balas**, dan kutipannya ikut dikirim ke model sebagai konteks. Perintah yang sedang berjalan bisa dihentikan lewat tombol **Stop** — koneksi ke gateway diputus sehingga agent ikut dibatalkan.
 - **Hermes Agent sebagai eksekutor**: Agent dapat menjalankan aksi dari balasannya (protokol `ACTION:`) untuk menambah/menyelesaikan todo, membuat event kalender, membuat spreadsheet (XLSX), menyusun presentasi (PPTX) bertema, serta mengirim berkas hasil olahan. Hermes selalu diberi **waktu sekarang (WITA) + tanggal hari ini & besok**, jadi permintaan seperti "jadwalkan besok jam 9" menghasilkan tanggal yang tepat.
 - **Unggah & olah berkas**: gambar (OCR via Tesseract), PDF (ekstraksi teks), DOCX/XLSX/PPTX (ekstraksi teks). Berkas bisa dipratinjau langsung di web tanpa unduh.
 - **Konversi ke PDF**: DOCX/PPTX/XLSX/teks/gambar → PDF memakai LibreOffice. Bisa lewat tombol **Jadikan PDF** di Gallery, atau perintah ke chat (agent menjalankan `tools/topdf.sh` lalu mengirim PDF-nya).
@@ -302,6 +302,7 @@ backend/            Laravel API
   tests/document_builder_check.php  self-check penulis XLSX (php, tanpa framework)
   tests/notulen_builder_check.php  self-check penulis DOCX notulen (php, tanpa framework)
   tests/chat_routing_check.php self-check routing notulen vs lanjutan, tautan media terakhir & kutipan balasan (php, butuh DB)
+  tests/chat_interrupt_check.php self-check Stop: read timeout & putus koneksi memutus upstream (php, tanpa framework)
   tests/marp_normalize_check.php self-check normalisasi Marp: palet menang atas style/backgroundColor, kelas contoh bertahan (php, tanpa framework)
   tests/eta_check.php         self-check rumus ETA (php, tanpa framework)
   tests/analytics_check.php   self-check rentang grafik analitik 7/30/90/365 hari (php, butuh DB)
@@ -350,6 +351,7 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - **NotulenBuilder** adalah satu-satunya penulis DOCX notulen dari `NOTULEN_BUILD`. Ia tidak memakai template `.docx` master atau `phpoffice/phpword`; layout, logo, dan kop terkunci langsung disusun sebagai XML dengan `ZipArchive`. Ekstraksi angka dari transkrip sangat panjang masih bergantung pada model, bukan parsing deterministik di backend; hasil yang dianggap tidak lengkap tetap harus diperiksa sebelum dipakai resmi. `decode()` memperbaiki JSON cacat (array tak tertutup, koma menggantung, escape tidak sah, kurung tutup tertukar), tetapi tidak menjamin semua angka terbawa.
 - Notulen bergantung pada `hermes proxy start --provider nous` yang dijalankan **manual** di host; setelah reboot proxy tidak hidup sendiri, jadi jalankan ulang. Tanpa proxy, notulen dibalas 503.
 - Chat hanya **merender** 30 pesan terakhir; pesan lama dimuat manual. Seluruh riwayat tetap dikirim ke model tiap request, jadi sesi sangat panjang masih memperbesar prompt dan memperlambat jawaban — belum ada pemotongan riwayat di server.
+- **Stop** chat memutus koneksi browser → backend menutup koneksi ke gateway, dan Hermes membatalkan agent yang sedang berjalan. Deteksinya memakai `read_timeout` 2 dtk + ping SSE, jadi pembatalan bisa tertunda hingga ~2 dtk; teks parsial yang sudah tampil dibuang (bukan disimpan sebagai balasan).
 - Kutipan balasan dipotong **600 karakter** sebelum dikirim ke model, jadi balasan atas pesan yang sangat panjang hanya membawa bagian awalnya.
 - Pembuatan PPTX memakai **marp-cli + Chromium** (Chromium sudah ada untuk konversi). Tema presentasi adalah **6 set tetap**; menambah tema = entri di `Presentasi.jsx` + variabel CSS Marp.
 - **Urutan CSS penting**: `theme.css` harus diimpor **setelah** `index.css` (setelah Tailwind) agar variabel tema menang atas utilitas Tailwind yang ber-hex statis. Dijaga oleh `main.jsx`; lihat komentar di kedua berkas.

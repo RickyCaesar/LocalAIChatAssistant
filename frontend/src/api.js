@@ -199,7 +199,8 @@ export function apiStt(blob) {
 
 // Stream the /api/chat response (SSE). Resolves with the final reply text.
 // onDelta(text) fires with the accumulated text as token chunks arrive.
-export function streamChat(payload, onDelta) {
+// signal (AbortSignal) memutus koneksi, yang juga menghentikan perintah di backend.
+export function streamChat(payload, onDelta, signal) {
   return new Promise((resolve, reject) => {
     const token = getToken();
     fetch(`${API_URL}/api/chat`, {
@@ -210,6 +211,7 @@ export function streamChat(payload, onDelta) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ ...payload, stream: true }),
+      signal,
     }).then(async (res) => {
       const ctype = res.headers.get('content-type') || '';
       if (!res.ok) {

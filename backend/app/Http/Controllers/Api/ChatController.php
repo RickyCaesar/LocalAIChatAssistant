@@ -463,7 +463,11 @@ class ChatController extends Controller
             $http = Http::timeout((int) Setting::get('ai_timeout', env('AI_TIMEOUT', 600)))
                 ->acceptJson()
                 ->asJson()
-                ->withOptions(['stream' => true]);
+                // read_timeout membuat loop bangun tiap beberapa detik walau agent
+                // sedang menjalankan tool tanpa output, supaya tombol Stop terdeteksi.
+                // shortcut: Stop memakai putus koneksi + poll 2 dtk, bukan endpoint
+                // cancel; upgrade ke /v1/runs/{id}/stop kalau gateway berubah.
+                ->withOptions(['stream' => true, 'read_timeout' => 2]);
 
             if ($apiKey = (string) env('AI_API_KEY')) {
                 $http = $http->withToken($apiKey);
@@ -517,12 +521,33 @@ class ChatController extends Controller
             $usage = null;
 
             while (! $body->eof()) {
-                $chunk = $body->read(8192);
+                try {
+                    $chunk = $body->read(8192);
+                } catch (\RuntimeException $e) {
+                    // Timeout baca bukan error upstream: lanjut untuk cek interrupt.
+                    if (! ($body->getMetadata('timed_out') ?? false)) {
+                        throw $e;
+                    }
+                    $chunk = '';
+                }
                 if ($chunk === '' || $chunk === false) {
                     if ($body->eof()) {
                         break;
                     }
-                    usleep(10000);
+                    // Komentar SSE sekaligus ping: memaksa PHP menulis agar
+                    // koneksi browser yang sudah ditutup (Stop) terdeteksi.
+                    echo ": ping\n\n";
+                    if (ob_get_level() > 0) {
+                        ob_flush();
+                    }
+                    flush();
+                    if (connection_aborted()) {
+                        // Tutup koneksi ke Hermes; gateway membatalkan agent yang
+                        // sedang berjalan saat kliennya putus.
+                        $body->close();
+
+                        return;
+                    }
                     continue;
                 }
                 $accum .= $chunk;

@@ -797,6 +797,7 @@ export default function App() {
   const voiceModeRef = useRef(voiceMode);
   const recRef = useRef(null);
   const recTimerRef = useRef(null);
+  const chatAbortRef = useRef(null);
   useEffect(() => {
     ttsRef.current = tts;
   }, [tts]);
@@ -1170,6 +1171,8 @@ export default function App() {
     setStreamText('');
     setProgress('waiting');
     setElapsed(0);
+    const controller = new AbortController();
+    chatAbortRef.current = controller;
 
     try {
       const reply = await streamChat(
@@ -1177,7 +1180,8 @@ export default function App() {
         (chunk) => {
           setProgress('writing');
           setStreamText(chunk);
-        }
+        },
+        controller.signal
       );
       setStreamText('');
       appendToActive((prev) => [...prev, { role: 'assistant', content: reply, at: new Date().toISOString() }]);
@@ -1197,18 +1201,26 @@ export default function App() {
       setStreamText('');
       appendToActive((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          error: true,
-          content: `**Connection error.** ${err.message}\n\nMake sure the backend and your local Hermes Agent are running. ${API_URL}`,
-        },
+        controller.signal.aborted
+          ? { role: 'assistant', content: '⏹ Dihentikan.', at: new Date().toISOString() }
+          : {
+              role: 'assistant',
+              error: true,
+              content: `**Connection error.** ${err.message}\n\nMake sure the backend and your local Hermes Agent are running. ${API_URL}`,
+            },
       ]);
     } finally {
+      chatAbortRef.current = null;
       setLoading(false);
       setProgress(null);
       setElapsed(0);
       textareaRef.current?.focus();
     }
+  };
+
+  const stopChat = () => {
+    chatAbortRef.current?.abort();
+    stopSpeech();
   };
 
   const handleFiles = async (files) => {
@@ -1892,15 +1904,27 @@ export default function App() {
                 >
                   <WaveIcon />
                 </button>
-                <button
-                  type="button"
-                  onClick={sendMessage}
-                  disabled={loading || (!input.trim() && pendingImages.length === 0) || !active}
-                  aria-label="Send message"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100"
-                >
-                  <SendIcon />
-                </button>
+                {loading ? (
+                  <button
+                    type="button"
+                    onClick={stopChat}
+                    aria-label="Hentikan perintah"
+                    title="Hentikan perintah"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white transition hover:bg-red-600"
+                  >
+                    <StopSoundIcon />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={sendMessage}
+                    disabled={(!input.trim() && pendingImages.length === 0) || !active}
+                    aria-label="Send message"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100"
+                  >
+                    <SendIcon />
+                  </button>
+                )}
               </div>
               {uploadError && (
                 <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-red-500 dark:text-red-400">{uploadError}</p>
