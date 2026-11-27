@@ -2,7 +2,7 @@
 
 Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lokal. Selain chat streaming, aplikasi ini menangani berkas (unggah, pratinjau, OCR, transkripsi audio), manajemen tugas & kalender, catatan rapat (notulensi), serta otomasi dokumen (spreadsheet). Proses berat seperti transkripsi audio, konversi video→MP3, dan penyusunan notulensi AI dijalankan **asinkron di antrean (queue)** oleh container worker terpisah, dengan progres dan estimasi selesai yang bisa dipantau dari menu **Antrean**. Frontend dan backend di-containerisasi dengan Docker Compose.
 
-> **Branch referensi `feature/clamav-scanner`.** Fitur baru berupa pemindaian unggahan dengan **ClamAV** sengaja dipisahkan dari `main` sebagai referensi. Fungsinya memindai setiap unggahan terautentikasi sebelum validasi, menolak berkas terinfeksi dengan modal peringatan + notifikasi, serta memeriksa sumber media di antrean sebelum diproses. Branch ini tidak digabung ke proyek utama; detail konfigurasi dan batasannya ada di README branch tersebut.
+> **Pemindaian ClamAV** sudah tergabung di `main` (sebelumnya berada di branch referensi `feature/clamav-scanner`). Setiap unggahan terautentikasi dipindai sebelum validasi; berkas terinfeksi ditolak dengan modal peringatan + notifikasi, dan sumber media di antrean diperiksa sebelum diproses. Konfigurasi dan batasannya ada di bawah.
 
 ## Fitur
 
@@ -14,7 +14,7 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Gallery**: daftar media yang dikirim/dihasilkan dengan pratinjau (gambar, PDF, audio, video, teks/dokumen), tampilan **grid/compact**, **pagination sisi klien**, **pencarian** nama berkas/percakapan/tanggal, **urutan tanggal** terbaru/terlama, filter tipe & sumber, serta detail (tanggal, ukuran, tipe, asal, percakapan, model).
 - **Transkripsi audio** (Speech-to-Text) lokal memakai `faster-whisper`; unggah via tombol atau **drag & drop**. Diproses **asinkron di antrean** (container `queue-worker`).
 - **Suara AI (Text-to-Speech)** lokal memakai **Piper** (CPU): tombol **Bacakan** di tiap balasan AI, plus **Mode Suara** dua arah (bicara → transkripsi → jawaban dibacakan otomatis → mikrofon siap lagi) — lihat *Mode Suara*.
-- **Antrean proses**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, posisi dalam antrean, dan **jam selesai (WITA)**. Tombol antrean di header (kiri lonceng notifikasi) menampilkan jumlah proses aktif dan membuka halaman Antrean; progres tetap berjalan saat berpindah menu.
+- **Antrean proses**: satu daftar berisi seluruh proses latar (konversi, transkripsi, notulensi, presentasi) dengan status, **persentase progres**, **estimasi selesai**, posisi dalam antrean, dan **jam selesai (WITA)**. Menu **Antrean** ada di grup **Alat** pada sidebar (dengan lencana jumlah proses aktif) dan membuka halaman Antrean; progres tetap berjalan saat berpindah menu.
 - **Notifikasi**: lonceng di header dengan lencana belum dibaca, toast di kanan atas saat tugas antrean selesai/gagal, dan **notifikasi browser (OS)** opsional saat tab tidak aktif. Tersimpan per akun dan bisa ditandai dibaca.
 - **Dashboard admin**: tren request & token untuk **7/30/90/365 hari**, total per rentang, label sumbu adaptif, dan tooltip per hari berisi jumlah request + token. Token chat streaming diambil dari `usage` gateway.
 - **Otomasi dokumen (XLSX)**: dari chat, agent dapat memicu `ACTION: DOC_BUILD <JSON>` untuk menyusun spreadsheet berstruktur (heading, kolom, baris) — misalnya tabel jadwal atau daftar kegiatan — lalu mengirimnya ke chat/Gallery.
@@ -24,8 +24,9 @@ Aplikasi web full-stack untuk mengobrol dengan **Hermes Agent** yang berjalan lo
 - **Todo**: prioritas, catatan, tenggat + jam, durasi, tindak lanjut, bukti dari Gallery, dan indikator kinerja yang dapat dikelola per pengguna. Daftar bisa difilter per tanggal dan diurutkan berdasarkan tenggat terdekat/terjauh, dengan **pagination sisi klien**. Bisa ditampilkan sebagai acara Kalender; perubahan/penghapusan tersinkron dua arah.
 - **Kalender**: tampilan Bulan/Minggu/Agenda, **hari libur nasional Indonesia**, acara berulang, filter per indikator, status selesai, serta edit tindak lanjut/bukti langsung dari acara tertaut. Bisa juga dikendalikan dari chat.
 - **Laporan Kinerja Bulanan**: matriks kegiatan/jam/bukti per indikator, total bulanan, indikator yang dikelola per pengguna, template kegiatan bulanan, lalu **generate PDF** berisi ringkasan, matriks, rincian, catatan, tanda tangan, dan lampiran. NIP dan jabatan pengguna diambil dari profil; saat generate dapat diisi nama, jabatan, dan NIP pimpinan untuk blok **"Mengetahui,"** di samping tanda tangan Penanggung Jawab. Orientasi PDF dapat dipilih **Portrait** atau **Landscape**.
-- **Pengaturan**: timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes), **tema tampilan** (Klasik/Senja/Mint) dan **tema gelap** (Nila/Ungu/Hijau) yang **berlaku untuk semua pengguna**. Model AI tidak diatur di sini: aplikasi selalu memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes.
+- **Pengaturan**: timeout, batas ukuran unggah, model & bahasa transkripsi, **suara TTS** (aktif/nonaktif, model suara, kecepatan, tombol tes). Model AI tidak diatur di sini: aplikasi selalu memakai alias gateway `hermes-agent`, jadi pemilihan model (dan mode gratisnya) sepenuhnya milik konfigurasi Hermes.
 - **Daftar Skill Hermes** (khusus admin): menampilkan kemampuan yang dimiliki agent dengan pencarian nama/kategori/deskripsi.
+- **Tampilan liquid glass**: mode gelap sebagai default, kanvas gradient ambient, sidebar/header dan bubble berbentuk kaca buram, tombol serta bubble berbentuk pill, font Afacad Flux + Instrument Sans + Spline Sans Mono. Mode terang memakai palet M3 terang dengan kulit kaca yang sama. Pemilih palet/tema dihapus, jadi satu palet per mode.
 - **Multi-akun & peran**: pengguna biasa dan admin (Dashboard analitik — termasuk **kartu kuota/kredit Hermes**, Kelola Pengguna, Skill, Settings).
 
 ## Teknologi
@@ -150,7 +151,7 @@ Mikrofon (Mode Suara) hanya tersedia di **secure context**: `localhost` atau HTT
 
 ### Pengaturan dalam aplikasi (menu **Settings**, admin)
 
-Tersimpan di DB (model `Setting`): `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`, `tts_enabled`, `tts_voice`, `tts_speed`, `theme_palette`, `theme_dark`. Tema berlaku global (disimpan admin); pilihan mode terang/gelap dan sakelar **Mode Suara** tetap per browser (`localStorage`).
+Tersimpan di DB (model `Setting`): `ai_timeout`, `max_upload_mb`, `stt_model`, `stt_language`, `tts_enabled`, `tts_voice`, `tts_speed`. Pilihan mode terang/gelap (default: gelap) dan sakelar **Mode Suara** tetap per browser (`localStorage`). Kunci `theme_palette`/`theme_dark` lama tidak dipakai lagi.
 
 ## Integrasi dengan Hermes Agent
 
@@ -283,7 +284,7 @@ Perekaman mikrofon butuh **secure context**: `localhost` atau HTTPS — dari HP 
 - Autentikasi memakai **Bearer token** (disimpan di `localStorage` frontend); hanya URL `/api/media/` yang membawa token via query `?auth=` karena `<img>`/`<iframe>` tidak bisa mengirim header. URL eksternal tidak diberi token.
 - **Admin** (kolom `is_admin`) mendapat menu tambahan: Dashboard, Pengguna, Skill, Settings.
 - **Menu profil** (foto/initial di header) membuka **Pengaturan akun** (ubah nama, email, NIP, jabatan, dan password sendiri lewat `PUT /api/profile`; ganti password wajib menyertakan password saat ini) dan **Keluar**. NIP dan jabatan yang diisi dipakai pada tanda tangan Laporan Kinerja.
-- **Tema tampilan** (palet terang & gelap) diatur admin di Settings dan berlaku **untuk semua pengguna** (tersimpan di tabel `settings`; `POST /api/settings` khusus admin, `GET` tetap terbuka). Toggle mode gelap/terang tetap per pengguna.
+- **Tema tampilan**: mode gelap adalah default. Toggle terang/gelap tetap per pengguna (`localStorage`); palet warna tidak bisa diganti dari UI karena pemilih tema sudah dihapus.
 
 ## Struktur Proyek
 
@@ -325,7 +326,7 @@ frontend/           React + Vite + Tailwind
   src/Pager.jsx               komponen pagination sisi klien untuk Gallery dan Todo
   src/holidays.js             helper hari libur Indonesia (date-holidays)
   src/time.js                 helper format jam & tanggal WITA (chat dan riwayat antrean)
-  src/theme.css               override utilitas Tailwind agar memakai variabel tema (diimpor setelah index.css)
+  src/theme.css               override utilitas Tailwind + kulit liquid glass (variabel `--lg-*`), diimpor setelah index.css
 tools/topdf.sh      konversi dokumen → PDF via container (dipakai agent dari chat)
 docker-compose.yml
 ```
@@ -365,6 +366,7 @@ Semua `/api/*` (kecuali `login`/`health`) butuh Bearer token.
 - Kutipan balasan dipotong **600 karakter** sebelum dikirim ke model, jadi balasan atas pesan yang sangat panjang hanya membawa bagian awalnya.
 - Pembuatan PPTX memakai **marp-cli + Chromium** (Chromium sudah ada untuk konversi). Tema presentasi adalah **6 set tetap**; menambah tema = entri di `Presentasi.jsx` + variabel CSS Marp.
 - **Urutan CSS penting**: `theme.css` harus diimpor **setelah** `index.css` (setelah Tailwind) agar variabel tema menang atas utilitas Tailwind yang ber-hex statis. Dijaga oleh `main.jsx`; lihat komentar di kedua berkas.
+- **Font & efek kaca**: Afacad Flux, Instrument Sans, dan Spline Sans Mono dimuat dari Google Fonts; tanpa akses internet browser memakai font sistem. Efek `backdrop-filter` tidak didukung browser lama, jadi panel kaca tampil sebagai latar solid di sana.
 - STT memakai `faster-whisper` (ffmpeg dibundel lewat PyAV), jadi `ffmpeg`/`whisper.cpp` tak diperlukan; base image backend adalah **Debian** (`php:8.2-cli`), bukan Alpine.
 - Berkas Office (DOCX/XLSX/PPTX) tak dirender native oleh browser; pratinjau menampilkan teks hasil ekstraksi. Untuk tata letak asli, konversikan ke PDF (LibreOffice mempertahankan format).
 - Konversi PDF berjalan sinkron (beberapa detik per berkas); LibreOffice memuat profil saat pertama kali dipanggil.
