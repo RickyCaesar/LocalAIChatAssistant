@@ -57,47 +57,67 @@
 .hover\:border-brand\/50:hover{ border-color: color-mix(in srgb, var(--c-brand) 50%, transparent); }
 .border-brand\/50{ border-color: color-mix(in srgb, var(--c-brand) 50%, transparent); }
 
-/* ===== kulit liquid glass (17 mockup Stitch) — tetap paling akhir ===== */
-.dark .liquid-canvas {
-  background-color: #0B1326;
-  background-image:
+/* ===== kulit liquid glass (17 mockup Stitch) — tetap paling akhir =====
+   :root dipakai supaya spesifisitas menyaingi utilitas Tailwind di atas. */
+:root {
+  --lg-bg: #FAF8FF;
+  --lg-panel: rgba(234, 237, 255, 0.65);
+  --lg-border: rgba(113, 119, 134, 0.4);
+  --lg-highlight: rgba(255, 255, 255, 0.75);
+  --lg-shadow: rgba(19, 27, 46, 0.22);
+  --lg-ambient:
+    radial-gradient(circle at 14% 18%, rgba(4, 180, 162, 0.12), transparent 42%),
+    radial-gradient(circle at 86% 12%, rgba(62, 144, 255, 0.14), transparent 45%),
+    radial-gradient(circle at 65% 88%, rgba(0, 90, 179, 0.10), transparent 45%);
+}
+.dark {
+  --lg-bg: #0B1326;
+  --lg-panel: rgba(23, 31, 51, 0.6);
+  --lg-border: rgba(65, 71, 84, 0.4);
+  --lg-highlight: rgba(255, 255, 255, 0.16);
+  --lg-shadow: rgba(0, 0, 0, 0.52);
+  --lg-ambient:
     radial-gradient(circle at 14% 18%, rgba(4, 180, 162, 0.22), transparent 42%),
     radial-gradient(circle at 86% 12%, rgba(62, 144, 255, 0.24), transparent 45%),
     radial-gradient(circle at 65% 88%, rgba(0, 90, 179, 0.20), transparent 45%);
 }
-.dark .glass-panel {
+:root .liquid-canvas {
+  background-color: var(--lg-bg);
+  background-image: var(--lg-ambient);
+}
+:root .glass-panel {
   backdrop-filter: blur(28px) saturate(160%);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.16), 0 20px 44px -16px rgba(0, 0, 0, 0.52);
+  box-shadow: inset 0 1px 0 0 var(--lg-highlight), 0 20px 44px -16px var(--lg-shadow);
 }
-.dark .glass-pill {
+:root .glass-pill {
   backdrop-filter: blur(20px) saturate(150%);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22), 0 8px 20px -6px rgba(0, 0, 0, 0.38);
+  box-shadow: inset 0 1px 0 0 var(--lg-highlight), 0 8px 20px -6px var(--lg-shadow);
 }
-.dark .lg-sidebar {
+:root .lg-sidebar {
   height: calc(100% - 1.5rem);
   margin: 0.75rem 0 0.75rem 0.75rem;
-  border: 1px solid rgba(65, 71, 84, 0.4);
+  border: 1px solid var(--lg-border);
   border-radius: 20px;
-  background-color: rgba(23, 31, 51, 0.6);
+  background-color: var(--lg-panel);
   backdrop-filter: blur(28px) saturate(160%);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.16), 0 20px 44px -16px rgba(0, 0, 0, 0.52);
+  box-shadow: inset 0 1px 0 0 var(--lg-highlight), 0 20px 44px -16px var(--lg-shadow);
 }
-.dark .lg-sidebar button,
-.dark .lg-sidebar a { border-radius: 9999px; }
-.dark .lg-header {
+:root .lg-sidebar button,
+:root .lg-sidebar a { border-radius: 9999px; }
+:root .lg-header {
   margin: 0.75rem 1rem 0;
-  border: 1px solid rgba(65, 71, 84, 0.4);
+  border: 1px solid var(--lg-border);
   border-radius: 9999px;
-  background-color: rgba(23, 31, 51, 0.6);
+  background-color: var(--lg-panel);
   backdrop-filter: blur(28px) saturate(160%);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.16), 0 20px 44px -16px rgba(0, 0, 0, 0.52);
+  box-shadow: inset 0 1px 0 0 var(--lg-highlight), 0 20px 44px -16px var(--lg-shadow);
 }
 @media (max-width: 1023px) {
-  .dark .lg-sidebar {
+  :root .lg-sidebar {
     height: 100%;
     margin: 0;
     border-radius: 0 20px 20px 0;
