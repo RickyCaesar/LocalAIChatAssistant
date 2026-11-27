@@ -2,79 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== runtime palette (tema terang) ===== */
-:root,
-[data-palette="klasik"] {
-  --c-brand: #425B9A;
-  --c-brand-100: #DCE3F0;
-  --c-brand-500: #425B9A;
-  --c-brand-600: #354A80;
-  --c-brand-700: #2A3A66;
-  --c-brand-800: #1F2B4D;
-  --c-brand-900: #171F38;
-  --c-brand-950: #0F162B;
-  --c-skyblue: #76C0EC;
-  --c-cream: #FFF6DC;
-  --c-blush: #FF95A5;
-}
-[data-palette="senja"] {
-  --c-brand: #6E4F9F;
-  --c-brand-100: #ECE4F7;
-  --c-brand-500: #6E4F9F;
-  --c-brand-600: #5A3F85;
-  --c-brand-700: #463162;
-  --c-brand-800: #32224A;
-  --c-brand-900: #251836;
-  --c-brand-950: #1A1128;
-  --c-skyblue: #AFC6EF;
-  --c-cream: #FAF4FF;
-  --c-blush: #FFB0C9;
-}
-[data-palette="mint"] {
-  --c-brand: #1E8A7E;
-  --c-brand-100: #DDF1ED;
-  --c-brand-500: #1E8A7E;
-  --c-brand-600: #187066;
-  --c-brand-700: #134F47;
-  --c-brand-800: #0E3A34;
-  --c-brand-900: #0B2E29;
-  --c-brand-950: #07201C;
-  --c-skyblue: #90D9C9;
-  --c-cream: #EEFBF3;
-  --c-blush: #FF9E8B;
+/* ===== palette liquid glass (desain Stitch) =====
+   shortcut: pemilihan tema dihapus, jadi satu palette per mode. Kalau variasi
+   warna diperlukan lagi, kembalikan blok `[data-palette]` / `[data-dark-theme]`
+   dan pasang pemilihnya di Settings. */
+:root {
+  --c-brand: #005AB3;
+  --c-brand-100: #D2D9F4;
+  --c-brand-500: #005AB3;
+  --c-brand-600: #00468C;
+  --c-brand-700: #00356B;
+  --c-brand-800: #0073E0;
+  --c-brand-900: #001E43;
+  --c-brand-950: #FAF8FF;
+  --c-skyblue: #006B5F;
+  --c-cream: #EAEDFF;
+  --c-blush: #BA1A1A;
 }
 
-/* ===== tema gelap: hanya aktif bersama .dark pada <html> =====
-   Menimpa permukaan/palet saat dark mode. Karena .dark[data-dark-theme=..]
-   lebih spesifik dari [data-palette=..], palette terang tak terpengaruh.
-   ponytail: 3 tema tetap (hardcoded). Tambah varian ke-4 = blok CSS + 1 entri
-   di DARK_THEMES; pindah ke data kalau jumlahnya mulai banyak. */
-.dark[data-dark-theme="nila"] {
-  --c-brand: #425B9A;
-  --c-brand-600: #354A80;
-  --c-brand-700: #2A3A66;
-  --c-brand-800: #1F2B4D;
-  --c-brand-900: #171F38;
-  --c-brand-950: #0F162B;
-  --c-skyblue: #76C0EC;
-}
-.dark[data-dark-theme="ungu"] {
-  --c-brand: #6E4F9F;
-  --c-brand-600: #5A3F85;
-  --c-brand-700: #463162;
-  --c-brand-800: #32224A;
-  --c-brand-900: #251836;
-  --c-brand-950: #1A1128;
-  --c-skyblue: #AFC6EF;
-}
-.dark[data-dark-theme="hijau"] {
-  --c-brand: #1E8A7E;
-  --c-brand-600: #187066;
-  --c-brand-700: #134F47;
-  --c-brand-800: #0E3A34;
-  --c-brand-900: #0B2E29;
-  --c-brand-950: #07201C;
-  --c-skyblue: #90D9C9;
+.dark {
+  --c-brand: #AAC7FF;
+  --c-brand-600: #3E90FF;
+  --c-brand-700: #005DB8;
+  --c-brand-800: #171F33;
+  --c-brand-900: #131B2E;
+  --c-brand-950: #0B1326;
+  --c-skyblue: #4FDBC8;
+  --c-cream: #222A3D;
+  --c-blush: #FFB4AB;
 }
 
 html,
@@ -85,10 +40,15 @@ body,
 
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif;
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+h1, h2, h3, h4 {
+  font-family: "Afacad Flux", "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
 
 /* iOS Safari auto-zoom saat input fokus bila font < 16px (bikin halaman
    terasa "tidak responsive"). !important karena mengalahkan utility Tailwind. */

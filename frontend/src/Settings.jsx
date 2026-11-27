@@ -2,18 +2,6 @@ import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { speak, stopSpeech } from './speech.js';
 
-const PALETTES = [
-  { key: 'klasik', label: 'Klasik', colors: ['#425B9A', '#76C0EC', '#FFF6DC', '#FF95A5'] },
-  { key: 'senja', label: 'Senja', colors: ['#6E4F9F', '#AFC6EF', '#FAF4FF', '#FFB0C9'] },
-  { key: 'mint', label: 'Mint', colors: ['#1E8A7E', '#90D9C9', '#EEFBF3', '#FF9E8B'] },
-];
-
-const DARK_THEMES = [
-  { key: 'nila', label: 'Nila', colors: ['#0F162B', '#1F2B4D', '#425B9A', '#76C0EC'] },
-  { key: 'ungu', label: 'Ungu', colors: ['#1A1128', '#32224A', '#6E4F9F', '#AFC6EF'] },
-  { key: 'hijau', label: 'Hijau', colors: ['#07201C', '#0E3A34', '#1E8A7E', '#90D9C9'] },
-];
-
 export default function Settings() {
   const [hermesStatus, setHermesStatus] = useState('unknown');
   const [error, setError] = useState(null);
@@ -28,8 +16,6 @@ export default function Settings() {
   const [testingVoice, setTestingVoice] = useState(false);
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [generalMsg, setGeneralMsg] = useState(null);
-  const [palette, setPalette] = useState(() => localStorage.getItem('palette') || 'klasik');
-  const [darkTheme, setDarkTheme] = useState(() => localStorage.getItem('dark-theme') || 'nila');
 
   useEffect(() => {
     (async () => {
@@ -51,8 +37,6 @@ export default function Settings() {
         setTtsEnabled(Boolean(Number(settings.tts_enabled ?? 1)));
         setTtsVoice(settings.tts_voice || ttsVoices.default || '');
         if (settings.tts_speed) setTtsSpeed(settings.tts_speed);
-        if (settings.theme_palette) setPalette(settings.theme_palette);
-        if (settings.theme_dark) setDarkTheme(settings.theme_dark);
       } catch (e) {
         setError(e.message);
       }
@@ -107,26 +91,6 @@ export default function Settings() {
   };
 
   // Tema tersimpan di server (berlaku untuk semua pengguna); event memicu App
-  // memuat ulang + memperbarui cache localStorage.
-  const saveTheme = (patch) => {
-    setError(null);
-    api('/api/settings', { method: 'POST', body: JSON.stringify(patch), silent: true })
-      .then(() => window.dispatchEvent(new Event('hermes-settings-changed')))
-      .catch((e) => setError(e.message));
-  };
-
-  const pickPalette = (key) => {
-    setPalette(key);
-    document.documentElement.dataset.palette = key;
-    saveTheme({ theme_palette: key });
-  };
-
-  const pickDarkTheme = (key) => {
-    setDarkTheme(key);
-    document.documentElement.dataset.darkTheme = key;
-    saveTheme({ theme_dark: key });
-  };
-
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
       <div className="flex items-center justify-between">
@@ -268,60 +232,6 @@ export default function Settings() {
           {testingVoice ? 'Hentikan tes' : 'Tes suara'}
         </button>
         {generalMsg && <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">{generalMsg}</p>}
-      </div>
-
-      <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
-        <h3 className="text-sm font-semibold">Tema tampilan</h3>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Pilih kombinasi warna UI (berlaku untuk semua pengguna).</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {PALETTES.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => pickPalette(p.key)}
-              className={`rounded-xl border p-3 text-left transition ${
-                palette === p.key
-                  ? 'border-brand ring-2 ring-brand/40 dark:border-skyblue dark:ring-skyblue/40'
-                  : 'border-slate-200 hover:border-brand/50 dark:border-slate-700'
-              }`}
-            >
-              <span className="text-sm font-medium">{p.label}</span>
-              <span className="mt-2 flex gap-1">
-                {p.colors.map((c) => (
-                  <span key={c} className="h-5 w-5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: c }} />
-                ))}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
-        <h3 className="text-sm font-semibold">Tema gelap</h3>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Warna UI saat mode gelap aktif (berlaku untuk semua pengguna). Terpisah dari tema di atas (yang berlaku di mode terang).
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {DARK_THEMES.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => pickDarkTheme(p.key)}
-              className={`rounded-xl border p-3 text-left transition ${
-                darkTheme === p.key
-                  ? 'border-brand ring-2 ring-brand/40 dark:border-skyblue dark:ring-skyblue/40'
-                  : 'border-slate-200 hover:border-brand/50 dark:border-slate-700'
-              }`}
-            >
-              <span className="text-sm font-medium">{p.label}</span>
-              <span className="mt-2 flex gap-1">
-                {p.colors.map((c) => (
-                  <span key={c} className="h-5 w-5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: c }} />
-                ))}
-              </span>
-            </button>
-          ))}
-        </div>
       </div>
 
     </div>

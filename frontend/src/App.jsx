@@ -139,7 +139,7 @@ const markdownComponents = {
 
 function Avatar() {
   return (
-    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white dark:bg-white dark:text-slate-900">
+    <div className="mt-1 hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white dark:bg-white dark:text-slate-900 sm:flex">
       H
     </div>
   );
@@ -219,7 +219,7 @@ function MessageBubble({ message, speaking, onSpeak, onReply }) {
   if (isUser) {
     return (
       <div className="flex w-full justify-end gap-3">
-        <div className="max-w-[80%] rounded-2xl rounded-br-md bg-brand px-4 py-2.5 text-white dark:bg-brand">
+        <div className="glass-panel max-w-[80%] rounded-2xl rounded-br-md border border-transparent bg-brand px-4 py-2.5 text-white dark:border-[#4FDBC8]/40 dark:bg-[#04B4A2]/25 dark:text-[#DAE2FD]">
           {message.image_ids && message.image_ids.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-2">
               {message.image_ids.map((id) => {
@@ -289,7 +289,7 @@ function MessageBubble({ message, speaking, onSpeak, onReply }) {
     <div className="flex w-full justify-start gap-3">
       <Avatar />
       <div
-        className={`max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-slate-800 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:text-slate-100 dark:ring-slate-700 ${
+        className={`glass-panel max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-slate-800 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:text-slate-100 dark:ring-slate-700 ${
           message.error ? 'ring-red-300 dark:ring-red-700' : ''
         }`}
       >
@@ -351,7 +351,7 @@ function StreamBubble({ text }) {
   return (
     <div className="flex w-full justify-start gap-3">
       <Avatar />
-      <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-slate-800 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:text-slate-100 dark:ring-slate-700">
+      <div className="glass-panel max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-slate-800 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:text-slate-100 dark:ring-slate-700">
         <p className="whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed">
           {text}
           <span className="ml-1 inline-block h-4 w-0.5 animate-pulse align-middle bg-slate-400 dark:bg-cream0" />
@@ -361,9 +361,9 @@ function StreamBubble({ text }) {
   );
 }
 
-function SunIcon() {
+function SunIcon({ className = 'h-5 w-5' }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2" />
       <path d="M12 20v2" />
@@ -377,9 +377,9 @@ function SunIcon() {
   );
 }
 
-function MoonIcon() {
+function MoonIcon({ className = 'h-5 w-5' }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
     </svg>
   );
@@ -545,7 +545,7 @@ function NavButton({ active, onClick, icon, label, badge, rail }) {
         rail ? 'lg:justify-center lg:px-2' : ''
       } ${
         active
-          ? 'bg-skyblue/30 text-brand dark:bg-brand-800 dark:text-white'
+          ? 'glass-pill bg-skyblue/30 text-brand dark:border dark:border-brand/35 dark:bg-brand/25 dark:text-white'
           : 'text-slate-600 hover:bg-cream dark:text-slate-300 dark:hover:bg-brand-800/60'
       }`}
     >
@@ -781,7 +781,7 @@ export default function App() {
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return true;
   });
   const [tts, setTts] = useState({ enabled: true, voice: '', speed: 1 });
   const [speaking, setSpeaking] = useState(null); // index pesan | -1 saat auto-play
@@ -930,7 +930,6 @@ export default function App() {
   }, [auth, refreshQueue, refreshNotifs]);
 
   const activeCount = queue.filter((t) => t.status === 'queued' || t.status === 'processing').length;
-  const runningTask = queue.find((t) => t.status === 'processing');
 
   const cancelTask = async (id) => {
     const ok = await confirmAction({
@@ -974,14 +973,6 @@ export default function App() {
         });
         const maxMb = Number(s.max_upload_mb);
         if (maxMb > 0) localStorage.setItem('max-upload-mb', String(maxMb));
-        if (s.theme_palette) {
-          document.documentElement.dataset.palette = s.theme_palette;
-          localStorage.setItem('palette', s.theme_palette);
-        }
-        if (s.theme_dark) {
-          document.documentElement.dataset.darkTheme = s.theme_dark;
-          localStorage.setItem('dark-theme', s.theme_dark);
-        }
       })
       .catch(() => {});
   }, []);
@@ -1343,7 +1334,7 @@ export default function App() {
   const rail = !sidebarOpen;
 
   return (
-    <div className="flex h-dvh bg-cream text-slate-900 transition-colors dark:bg-brand-950 dark:text-slate-100">
+    <div className="liquid-canvas flex h-dvh bg-cream text-slate-900 transition-colors dark:bg-brand-950 dark:text-slate-100">
       <div
         className={`fixed inset-0 z-30 bg-black/40 transition-opacity duration-300 lg:hidden ${
           sidebarOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
@@ -1351,7 +1342,7 @@ export default function App() {
         onClick={() => setSidebarOpen(false)}
       />
       <aside
-        className={`flex w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-brand max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-2xl ${
+        className={`lg-sidebar flex w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-brand max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-2xl ${
           sidebarOpen ? 'max-lg:translate-x-0 lg:w-64' : 'max-lg:-translate-x-full lg:w-16'
         }`}
       >
@@ -1362,7 +1353,7 @@ export default function App() {
             onClick={newSession}
             disabled={page !== 'chat'}
             title={rail ? 'New chat' : undefined}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100 ${
+            className={`glass-pill flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-skyblue dark:text-brand-950 dark:hover:brightness-110 ${
               rail ? 'lg:mb-3' : ''
             }`}
           >
@@ -1408,6 +1399,14 @@ export default function App() {
           <div className={`mx-2 my-2 hidden border-t border-slate-200 dark:border-slate-800 ${rail ? 'lg:block' : ''}`} />
           <NavGroup label="Alat" open={openGroups.alat} onToggle={() => toggleGroup('alat')} rail={rail}>
             <div className="space-y-1">
+              <NavButton
+                active={page === 'queue'}
+                onClick={() => goTo('queue')}
+                icon={<QueueIcon />}
+                label="Antrean"
+                badge={activeCount}
+                rail={rail}
+              />
               <NavButton
                 active={page === 'transcribe'}
                 onClick={() => goTo('transcribe')}
@@ -1599,8 +1598,8 @@ export default function App() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur dark:border-slate-800 dark:bg-brand-900/90">
-          <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-3">
+        <header className="lg-header sticky top-0 z-10 border-b border-slate-200 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur dark:border-slate-800 dark:bg-brand-900/90">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-6">
             <div className="flex min-w-0 items-center gap-2.5">
               <button
                 type="button"
@@ -1647,28 +1646,10 @@ export default function App() {
                                         ? 'Pengaturan Akun'
                                         : 'Settings'}
                 </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Local AI chat</p>
+                <p className="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">Local AI chat</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => goTo('queue')}
-                aria-label="Antrean proses"
-                title={runningTask ? `Antrean proses (${runningTask.progress}%)` : 'Antrean proses'}
-                className={`relative rounded-lg p-2 transition hover:bg-cream dark:hover:bg-brand-800 ${
-                  page === 'queue'
-                    ? 'bg-skyblue/30 text-brand dark:bg-brand-800 dark:text-white'
-                    : 'text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                <QueueIcon />
-                {activeCount > 0 && (
-                  <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[0.6rem] font-semibold text-white dark:bg-skyblue dark:text-brand-900">
-                    {activeCount > 9 ? '9+' : activeCount}
-                  </span>
-                )}
-              </button>
               <NotificationBell
                 items={notifs}
                 unread={unread}
@@ -1686,9 +1667,18 @@ export default function App() {
                 type="button"
                 onClick={() => setDark((v) => !v)}
                 aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
-                className="rounded-lg p-2 text-slate-600 transition hover:bg-cream dark:text-slate-300 dark:hover:bg-brand-800"
+                className="relative flex items-center rounded-full border border-black/15 bg-black/5 p-1 backdrop-blur-sm transition-colors dark:border-white/30 dark:bg-white/20"
               >
-                {dark ? <SunIcon /> : <MoonIcon />}
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm transition-transform duration-300 ${
+                    dark ? 'translate-x-6' : 'translate-x-0'
+                  }`}
+                >
+                  <SunIcon className="h-3.5 w-3.5" />
+                </span>
+                <span className="flex h-6 w-6 items-center justify-center text-slate-500 dark:text-white/80">
+                  <MoonIcon className="h-3.5 w-3.5" />
+                </span>
               </button>
             </div>
           </div>
@@ -1746,7 +1736,7 @@ export default function App() {
                 {loading && !streamText && (
                   <div className="flex w-full justify-start gap-3">
                     <Avatar />
-                    <div className="rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
+                    <div className="glass-panel rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
                       <TypingIndicator />
                     </div>
                   </div>
@@ -1789,7 +1779,7 @@ export default function App() {
                 setDragOver(false);
                 handleFiles(e.dataTransfer.files);
               }}
-              className={`border-t border-slate-200 bg-white/80 px-4 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur transition dark:border-slate-800 dark:bg-brand-900/90 ${
+              className={`px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition ${
                 dragOver ? 'bg-skyblue/20 dark:bg-brand-800/80' : ''
               }`}
             >
@@ -1847,7 +1837,7 @@ export default function App() {
                   )}
                 </div>
               )}
-              <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-slate-400 dark:border-slate-700 dark:bg-brand-800 dark:focus-within:border-skyblue">
+              <div className="glass-panel mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-slate-200 bg-white/75 px-4 py-2 shadow-sm focus-within:border-slate-400 dark:border-[#414754]/50 dark:bg-[#171F33]/75 dark:focus-within:border-skyblue">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1864,7 +1854,7 @@ export default function App() {
                   disabled={loading}
                   aria-label="Attach file"
                   title="Attach file"
-                  className="shrink-0 rounded-xl p-2.5 text-slate-500 transition hover:bg-cream disabled:opacity-40 dark:text-slate-400 dark:hover:bg-brand-600"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-cream disabled:opacity-40 dark:text-[#C0C6D6] dark:hover:bg-[#222A3D]/60"
                 >
                   <ImageIcon />
                 </button>
@@ -1875,7 +1865,7 @@ export default function App() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Tulis pesan..."
-                  className="max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-[0.95rem] outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-400 dark:text-[#DAE2FD] dark:placeholder:text-[#8B91A0]"
                 />
                 <button
                   type="button"
@@ -1883,10 +1873,10 @@ export default function App() {
                   disabled={!voiceMode || loading || transcribing || speaking !== null}
                   aria-label={recording ? 'Berhenti merekam' : 'Mulai merekam'}
                   title={recording ? 'Berhenti merekam & kirim' : 'Mulai merekam'}
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-40 ${
                     recording
                       ? 'animate-pulse bg-red-500 text-white hover:bg-red-600'
-                      : 'text-slate-500 hover:bg-cream dark:text-slate-400 dark:hover:bg-brand-600'
+                      : 'text-slate-500 hover:bg-cream dark:text-[#C0C6D6] dark:hover:bg-[#222A3D]/60'
                   }`}
                 >
                   <MicIcon />
@@ -1896,10 +1886,10 @@ export default function App() {
                   onClick={toggleVoiceMode}
                   aria-label="Mode suara"
                   title="Mode suara (rekam & dengarkan balasan)"
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition ${
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${
                     voiceMode
-                      ? 'bg-brand text-white hover:bg-brand-600 dark:bg-skyblue dark:text-slate-900 dark:hover:bg-skyblue/85'
-                      : 'text-slate-500 hover:bg-cream dark:text-slate-400 dark:hover:bg-brand-600'
+                      ? 'bg-brand text-white hover:bg-brand-600 dark:bg-brand-600 dark:text-[#001E43]'
+                      : 'text-slate-500 hover:bg-cream dark:text-[#C0C6D6] dark:hover:bg-[#222A3D]/60'
                   }`}
                 >
                   <WaveIcon />
@@ -1910,7 +1900,7 @@ export default function App() {
                     onClick={stopChat}
                     aria-label="Hentikan perintah"
                     title="Hentikan perintah"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500 text-white transition hover:bg-red-600"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500 text-white transition hover:bg-red-600 dark:bg-[#FFB4AB] dark:text-[#690005]"
                   >
                     <StopSoundIcon />
                   </button>
@@ -1920,7 +1910,7 @@ export default function App() {
                     onClick={sendMessage}
                     disabled={(!input.trim() && pendingImages.length === 0) || !active}
                     aria-label="Send message"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-brand-600 dark:text-[#001E43]"
                   >
                     <SendIcon />
                   </button>
