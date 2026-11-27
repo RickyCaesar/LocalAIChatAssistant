@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { api, mediaSrc, apiUpload, apiGeneratePptx, apiDraftPresentation, apiQueueTask } from './api.js';
 import { confirmAction, showSuccess } from './feedback.js';
 import { ProgressBar } from './Queue.jsx';
+import Pager from './Pager.jsx';
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+const PAGE_SIZE = 10;
 const MAX_MATERIAL_CHARS = 20000;
 
 // Palet tema. Dikirim sebagai hex ke backend lalu di-inject ke CSS Marp.
@@ -121,6 +123,7 @@ export default function Presentasi() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [items, setItems] = useState([]);
+  const [page, setPage] = useState(1);
   const [prompt, setPrompt] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [materials, setMaterials] = useState([]);
@@ -135,6 +138,10 @@ export default function Presentasi() {
   };
 
   useEffect(load, []);
+
+  const pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const current = Math.min(page, pages);
+  const paged = items.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
   const materialText = materials
     .filter((m) => (m.preview || '').trim())
@@ -437,7 +444,7 @@ export default function Presentasi() {
           <p className="mt-2 text-sm text-slate-400 dark:text-slate-500">Belum ada presentasi.</p>
         ) : (
           <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:divide-slate-800 dark:bg-brand-900 dark:ring-slate-700">
-            {items.map((m) => (
+            {paged.map((m) => (
               <li key={m.id} className="flex items-center gap-3 px-3 py-2">
                 <span className="shrink-0 rounded-lg bg-brand px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">
                   PPTX
@@ -466,6 +473,7 @@ export default function Presentasi() {
             ))}
           </ul>
         )}
+        <Pager page={current} pages={pages} onChange={setPage} />
       </div>
     </div>
   );

@@ -1,5 +1,9 @@
+import { useState } from 'react';
 import { mediaSrc } from './api.js';
 import { fmtWita } from './time.js';
+import Pager from './Pager.jsx';
+
+const PAGE_SIZE = 10;
 
 const TYPE_LABEL = {
   convert: 'Konversi MP3',
@@ -148,8 +152,13 @@ function TaskRow({ task, onCancel }) {
 }
 
 export default function QueuePage({ tasks = [], onCancel }) {
+  const [page, setPage] = useState(1);
   const active = tasks.filter((t) => t.status === 'queued' || t.status === 'processing');
   const finished = tasks.filter((t) => t.status === 'done' || t.status === 'error');
+  // shortcut: hanya riwayat yang dipaginasi; proses berjalan sengaja tetap semua tampil.
+  const pages = Math.max(1, Math.ceil(finished.length / PAGE_SIZE));
+  const current = Math.min(page, pages);
+  const paged = finished.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
   const card = 'rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700';
 
@@ -181,10 +190,11 @@ export default function QueuePage({ tasks = [], onCancel }) {
         <>
           <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-slate-400">Riwayat</h3>
           <div className="mt-2 space-y-3">
-            {finished.map((t) => (
+            {paged.map((t) => (
               <TaskRow key={t.id} task={t} />
             ))}
           </div>
+          <Pager page={current} pages={pages} onChange={setPage} />
         </>
       )}
     </div>
