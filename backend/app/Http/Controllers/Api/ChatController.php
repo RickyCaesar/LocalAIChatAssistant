@@ -77,7 +77,7 @@ class ChatController extends Controller
         return null;
     }
 
-    private function contentFor(array $turn): array|string
+    private function contentFor(array $turn, bool $fullText = false): array|string
     {
         $text = (string) ($turn['content'] ?? '');
         $ids = $turn['image_ids'] ?? [];
@@ -99,7 +99,10 @@ class ChatController extends Controller
                     'image_url' => ['url' => 'data:'.$item->mime.';base64,'.base64_encode((string) file_get_contents($full))],
                 ];
             } else {
-                $body = trim((string) $item->preview);
+                // Transkrip notulen harus utuh; preview media dipotong 8 KB.
+                $body = $fullText && str_starts_with((string) $item->mime, 'text/')
+                    ? trim((string) file_get_contents($full))
+                    : trim((string) $item->preview);
                 $filesText .= "\n\n[Lampiran: ".$item->filename."]".($body !== '' ? "\n".$body : '');
             }
         }
@@ -414,7 +417,7 @@ class ChatController extends Controller
             if (! isset($turn['role'], $turn['content'])) {
                 continue;
             }
-            $content = $this->contentFor($turn);
+            $content = $this->contentFor($turn, $isNotulen);
             // API menolak turn ber-content kosong (400 INVALID_REQUEST_BODY).
             if (is_string($content) && trim($content) === '') {
                 continue;
@@ -428,7 +431,7 @@ class ChatController extends Controller
         $userContent = $this->contentFor([
             'content' => $validated['message'],
             'image_ids' => $validated['image_ids'] ?? [],
-        ]);
+        ], $isNotulen);
         if (is_string($userContent) && trim($userContent) === '') {
             $userContent = '[...]';
         }
@@ -481,7 +484,7 @@ class ChatController extends Controller
             $payload = [
                 // Notulen memakai model 1M konteks yang tahan transkrip panjang;
                 // model default tetap dipakai untuk chat biasa.
-                'model' => $isNotulen ? (string) env('AI_NOTULEN_MODEL', 'meituan/longcat-2.5:free') : $model,
+                'model' => $isNotulen ? (string) env('AI_NOTULEN_MODEL', 'tencent/hy4-flash:free') : $model,
                 'messages' => $messages,
                 'temperature' => $isNotulen ? 0.0 : (float) env('AI_TEMPERATURE', 0.7),
                 'stream' => true,
