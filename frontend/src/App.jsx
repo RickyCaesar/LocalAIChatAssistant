@@ -219,7 +219,7 @@ function MessageBubble({ message, speaking, onSpeak, onReply }) {
   if (isUser) {
     return (
       <div className="flex w-full justify-end gap-3">
-        <div className="max-w-[80%] rounded-2xl rounded-br-md bg-brand px-4 py-2.5 text-white dark:bg-brand">
+        <div className="glass-panel max-w-[80%] rounded-2xl rounded-br-md bg-brand px-4 py-2.5 text-white dark:bg-skyblue dark:text-brand-950">
           {message.image_ids && message.image_ids.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-2">
               {message.image_ids.map((id) => {
@@ -289,7 +289,7 @@ function MessageBubble({ message, speaking, onSpeak, onReply }) {
     <div className="flex w-full justify-start gap-3">
       <Avatar />
       <div
-        className={`max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-slate-800 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:text-slate-100 dark:ring-slate-700 ${
+        className={`glass-panel max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-slate-800 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:text-slate-100 dark:ring-slate-700 ${
           message.error ? 'ring-red-300 dark:ring-red-700' : ''
         }`}
       >
@@ -351,7 +351,7 @@ function StreamBubble({ text }) {
   return (
     <div className="flex w-full justify-start gap-3">
       <Avatar />
-      <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-slate-800 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:text-slate-100 dark:ring-slate-700">
+      <div className="glass-panel max-w-[85%] rounded-2xl rounded-bl-md bg-white px-4 py-2.5 text-slate-800 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:text-slate-100 dark:ring-slate-700">
         <p className="whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed">
           {text}
           <span className="ml-1 inline-block h-4 w-0.5 animate-pulse align-middle bg-slate-400 dark:bg-cream0" />
@@ -545,7 +545,7 @@ function NavButton({ active, onClick, icon, label, badge, rail }) {
         rail ? 'lg:justify-center lg:px-2' : ''
       } ${
         active
-          ? 'bg-skyblue/30 text-brand dark:bg-brand-800 dark:text-white'
+          ? 'glass-pill bg-skyblue/30 text-brand dark:border dark:border-brand/35 dark:bg-brand/25 dark:text-brand'
           : 'text-slate-600 hover:bg-cream dark:text-slate-300 dark:hover:bg-brand-800/60'
       }`}
     >
@@ -781,7 +781,7 @@ export default function App() {
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return true;
   });
   const [tts, setTts] = useState({ enabled: true, voice: '', speed: 1 });
   const [speaking, setSpeaking] = useState(null); // index pesan | -1 saat auto-play
@@ -1343,7 +1343,7 @@ export default function App() {
   const rail = !sidebarOpen;
 
   return (
-    <div className="flex h-dvh bg-cream text-slate-900 transition-colors dark:bg-brand-950 dark:text-slate-100">
+    <div className="liquid-canvas flex h-dvh bg-cream text-slate-900 transition-colors dark:bg-brand-950 dark:text-slate-100">
       <div
         className={`fixed inset-0 z-30 bg-black/40 transition-opacity duration-300 lg:hidden ${
           sidebarOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
@@ -1351,7 +1351,7 @@ export default function App() {
         onClick={() => setSidebarOpen(false)}
       />
       <aside
-        className={`flex w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-brand max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-2xl ${
+        className={`lg-sidebar flex w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-brand max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-2xl ${
           sidebarOpen ? 'max-lg:translate-x-0 lg:w-64' : 'max-lg:-translate-x-full lg:w-16'
         }`}
       >
@@ -1362,7 +1362,7 @@ export default function App() {
             onClick={newSession}
             disabled={page !== 'chat'}
             title={rail ? 'New chat' : undefined}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-900 dark:hover:bg-brand-100 ${
+            className={`glass-pill flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-skyblue dark:text-brand-950 dark:hover:brightness-110 ${
               rail ? 'lg:mb-3' : ''
             }`}
           >
@@ -1599,7 +1599,7 @@ export default function App() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur dark:border-slate-800 dark:bg-brand-900/90">
+        <header className="lg-header sticky top-0 z-10 border-b border-slate-200 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur dark:border-slate-800 dark:bg-brand-900/90">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-3">
             <div className="flex min-w-0 items-center gap-2.5">
               <button
@@ -1746,7 +1746,7 @@ export default function App() {
                 {loading && !streamText && (
                   <div className="flex w-full justify-start gap-3">
                     <Avatar />
-                    <div className="rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
+                    <div className="glass-panel rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-brand-900 dark:ring-slate-700">
                       <TypingIndicator />
                     </div>
                   </div>

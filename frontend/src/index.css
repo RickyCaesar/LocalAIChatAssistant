@@ -44,37 +44,20 @@
   --c-blush: #FF9E8B;
 }
 
-/* ===== tema gelap: hanya aktif bersama .dark pada <html> =====
-   Menimpa permukaan/palet saat dark mode. Karena .dark[data-dark-theme=..]
-   lebih spesifik dari [data-palette=..], palette terang tak terpengaruh.
-   ponytail: 3 tema tetap (hardcoded). Tambah varian ke-4 = blok CSS + 1 entri
-   di DARK_THEMES; pindah ke data kalau jumlahnya mulai banyak. */
-.dark[data-dark-theme="nila"] {
-  --c-brand: #425B9A;
-  --c-brand-600: #354A80;
-  --c-brand-700: #2A3A66;
-  --c-brand-800: #1F2B4D;
-  --c-brand-900: #171F38;
-  --c-brand-950: #0F162B;
-  --c-skyblue: #76C0EC;
-}
-.dark[data-dark-theme="ungu"] {
-  --c-brand: #6E4F9F;
-  --c-brand-600: #5A3F85;
-  --c-brand-700: #463162;
-  --c-brand-800: #32224A;
-  --c-brand-900: #251836;
-  --c-brand-950: #1A1128;
-  --c-skyblue: #AFC6EF;
-}
-.dark[data-dark-theme="hijau"] {
-  --c-brand: #1E8A7E;
-  --c-brand-600: #187066;
-  --c-brand-700: #134F47;
-  --c-brand-800: #0E3A34;
-  --c-brand-900: #0B2E29;
-  --c-brand-950: #07201C;
-  --c-skyblue: #90D9C9;
+/* ===== tema gelap liquid glass (desain Stitch) =====
+   shortcut: ketiga varian tema gelap kini memakai satu palette M3; kalau variasi
+   warna ingin dipertahankan, pisahkan lagi per `data-dark-theme` dan batasi
+   kulit kaca ke varian `liquid`. */
+.dark[data-dark-theme] {
+  --c-brand: #AAC7FF;
+  --c-brand-600: #3E90FF;
+  --c-brand-700: #005DB8;
+  --c-brand-800: #171F33;
+  --c-brand-900: #131B2E;
+  --c-brand-950: #0B1326;
+  --c-skyblue: #4FDBC8;
+  --c-cream: #222A3D;
+  --c-blush: #FFB4AB;
 }
 
 html,
@@ -85,10 +68,15 @@ body,
 
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif;
+  font-family: "Instrument Sans", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+h1, h2, h3, h4 {
+  font-family: "Afacad Flux", "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
 
 /* iOS Safari auto-zoom saat input fokus bila font < 16px (bikin halaman
    terasa "tidak responsive"). !important karena mengalahkan utility Tailwind. */
